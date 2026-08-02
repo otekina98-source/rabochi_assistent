@@ -219,3 +219,84 @@ body {
     .stores-grid { grid-template-columns: 1fr; }
     .container { padding: 20px 15px; }
 }
+/* Стили для инструкции по сайту */
+.site-instruction {
+    max-width: 900px;
+    margin: 0 auto;
+    line-height: 1.7;
+}
+
+.site-instruction h2 {
+    font-size: 2em;
+    margin-bottom: 25px;
+    color: #1d1d1f;
+    border-bottom: 3px solid #D8BFD8;
+    padding-bottom: 15px;
+}
+
+.site-instruction h3 {
+    font-size: 1.5em;
+    margin: 30px 0 15px 0;
+    color: #1d1d1f;
+}
+
+.site-instruction h4 {
+    font-size: 1.2em;
+    margin: 20px 0 10px 0;
+    color: #1d1d1f;
+}
+
+.instruction-section {
+    margin-bottom: 25px;
+    padding: 20px;
+    background: #FAF8FF;
+    border-radius: 12px;
+    border: 1px solid #E6E6FA;
+}
+
+.instruction-section.warning {
+    background: #FFF9E6;
+    border: 2px solid #FFE082;
+}
+
+.instruction-section.warning p {
+    font-size: 1.05em;
+    line-height: 1.6;
+}
+
+.instruction-section ul,
+.instruction-section ol {
+    padding-left: 25px;
+    margin: 10px 0;
+}
+
+.instruction-section li {
+    margin-bottom: 10px;
+    font-size: 1em;
+}
+
+.sverka-link {
+    color: #005BFF;
+    text-decoration: none;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.sverka-link:hover {
+    background: #E6E6FA;
+    text-decoration: underline;
+}
+
+.instruction-section.footer {
+    text-align: center;
+    background: #E6E6FA;
+    padding: 25px;
+    margin-top: 30px;
+}
+
+.instruction-section.footer p {
+    font-size: 1.2em;
+    margin: 0;
+}
