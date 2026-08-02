@@ -53,8 +53,6 @@ async function handleLP(file) {
         }
 
         console.log('✅ ЛП загружено:', lpData.length, 'товаров');
-        if (lpData.length > 0) console.log('Пример:', lpData[0]);
-
         updateStatus('lpStatus', '✅', `Загружено: ${lpData.length} товаров`);
         checkReady();
     } catch (err) {
@@ -87,7 +85,6 @@ async function handleSK(file) {
         try {
             const base64Pdf = btoa(String.fromCharCode(...skPdfBytes));
             sessionStorage.setItem('skPdfBase64', base64Pdf);
-            console.log('✅ ШК PDF сохранён в sessionStorage');
         } catch (storageErr) {
             console.warn('⚠️ Не удалось сохранить в sessionStorage:', storageErr.message);
         }
@@ -110,8 +107,6 @@ async function handleSK(file) {
         }
 
         console.log('✅ Всего найдено наклеек:', Object.keys(skPages).length);
-        console.log('Примеры:', Object.keys(skPages).slice(0, 5));
-
         updateStatus('skStatus', '✅', `Загружено: ${Object.keys(skPages).length} наклеек`);
         checkReady();
     } catch (err) {
@@ -148,16 +143,11 @@ function handlePrice(file) {
                         processedCount++;
                     } else {
                         skippedCount++;
-                        if (skippedCount <= 5) {
-                            console.log(`⚠️ Пропущен артикул: "${row[0]}" → "${article}"`);
-                        }
                     }
                 }
             }
 
             console.log('✅ Прайс загружен:', processedCount, 'товаров');
-            console.log('⚠️ Пропущено:', skippedCount, 'строк');
-
             updateStatus('priceStatus', '✅', `Загружено: ${processedCount} товаров`);
             checkReady();
         } catch (err) {
@@ -174,12 +164,6 @@ function handlePrice(file) {
 function checkReady() {
     const ready = lpData.length > 0 && skPdfBytes !== null && Object.keys(priceData).length > 0;
     document.getElementById('generateBtn').disabled = !ready;
-
-    console.log('📊 Статус загрузки:');
-    console.log('  - ЛП:', lpData.length > 0 ? '✅' : '', `(${lpData.length} товаров)`);
-    console.log('  - ШК:', skPdfBytes !== null ? '✅' : '❌', `(${skPdfBytes ? skPdfBytes.length : 0} байт)`);
-    console.log('  - Прайс:', Object.keys(priceData).length > 0 ? '✅' : '❌', `(${Object.keys(priceData).length} товаров)`);
-    console.log('  - Готовность:', ready ? '✅ МОЖНО ФОРМИРОВАТЬ' : '❌');
 }
 
 // ============================================================
@@ -191,16 +175,14 @@ function updateStatus(elementId, icon, text) {
 }
 
 // ============================================================
-// ОСНОВНАЯ ГЕНЕРАЦИЯ
+// ОСНОВНАЯ ГЕНЕРАЦИЯ (С ДОБАВЛЕННЫМ ПРЕДУПРЕЖДЕНИЕМ)
 // ============================================================
 async function generateFiles() {
     try {
         console.log('\n=== 🚀 НАЧАЛО ГЕНЕРАЦИИ ===');
-        console.log('skPdfBytes:', skPdfBytes ? skPdfBytes.length : 'null', 'байт');
-        console.log('skPages:', Object.keys(skPages).length, 'наклеек');
 
+        // Восстановление PDF, если упала память
         if (!skPdfBytes || skPdfBytes.length === 0) {
-            console.warn('⚠️ skPdfBytes пустой, пробуем восстановить из sessionStorage...');
             try {
                 const base64Pdf = sessionStorage.getItem('skPdfBase64');
                 if (base64Pdf) {
@@ -209,18 +191,15 @@ async function generateFiles() {
                     for (let i = 0; i < binaryString.length; i++) {
                         skPdfBytes[i] = binaryString.charCodeAt(i);
                     }
-                    console.log('✅ Восстановлено из sessionStorage:', skPdfBytes.length, 'байт');
-                } else {
-                    console.error(' sessionStorage тоже пустой!');
                 }
             } catch (err) {
-                console.error(' Ошибка восстановления:', err);
+                console.error('Ошибка восстановления:', err);
             }
         }
 
         document.getElementById('progressSection').classList.remove('hidden');
         document.getElementById('generateBtn').disabled = true;
-        updateProgress(10, 'Сопоставление данных...');
+        updateProgress(5, 'Сопоставление данных...');
 
         sortedData = lpData.map(item => ({
             number: item.number,
@@ -228,36 +207,34 @@ async function generateFiles() {
             article: item.article
         }));
 
-        console.log('\n📋 ПЕРЕД СОРТИРОВКОЙ (первые 3):');
-        sortedData.slice(0, 3).forEach((item, i) => {
-            console.log(`${i+1}. "${item.name.substring(0, 50)}..."`);
-        });
-
-        updateProgress(30, 'Сортировка по алфавиту...');
-
+        updateProgress(20, 'Сортировка по алфавиту...');
         sortedData.sort((a, b) => {
             const nameA = a.name.trim().toLowerCase();
             const nameB = b.name.trim().toLowerCase();
             return nameA.localeCompare(nameB, 'ru');
         });
 
-        console.log('\n ПОСЛЕ СОРТИРОВКИ (первые 3 и последние 3):');
-        sortedData.slice(0, 3).forEach((item, i) => {
-            console.log(`${i+1}. "${item.name.substring(0, 60)}..."`);
-        });
-        console.log('...');
-        sortedData.slice(-3).forEach((item, i) => {
-            console.log(`${sortedData.length-2+i}. "${item.name.substring(0, 60)}..."`);
-        });
-
-        updateProgress(50, 'Подготовка предпросмотра...');
+        updateProgress(40, 'Подготовка предпросмотра...');
         showPreview();
 
-        updateProgress(100, 'Готово к скачиванию!');
+        // ФИНАЛЬНОЕ ПРЕДУПРЕЖДЕНИЕ
+        const totalItems = sortedData.length;
+        if (totalItems > 500) {
+            updateProgress(60, `⚠️ ВАЖНО: Идет формирование ${totalItems} наклеек. Пожалуйста, подождите! Это займет от 30 секунд до 3 минут в зависимости от объема данных.`);
+        } else {
+            updateProgress(60, 'Подготовка к скачиванию...');
+        }
+
+        // Даем браузеру время отрисовать сообщение
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        updateProgress(80, 'Файлы сформированы. Начинается загрузка...');
+
+        updateProgress(100, 'Готово!');
         setTimeout(() => {
             document.getElementById('progressSection').classList.add('hidden');
             document.getElementById('generateBtn').disabled = false;
-        }, 500);
+        }, 1500);
 
     } catch (error) {
         console.error('❌ Ошибка генерации:', error);
@@ -308,75 +285,55 @@ function switchTab(tab) {
 }
 
 // ============================================================
-// СКАЧИВАНИЕ EXCEL (оптимизировано для 10 000+ строк)
+// СКАЧИВАНИЕ EXCEL (Оптимизировано для 10 000+ строк)
 // ============================================================
 function downloadExcel() {
     try {
-        console.log('📊 Начинаем генерацию Excel (', sortedData.length, ' строк)');
-
-        // 1. Создаём рабочую книгу
+        console.log('📊 Генерация Excel (', sortedData.length, ' строк)');
+        
         const wb = XLSX.utils.book_new();
-
-        // 2. Генерируем заголовки
         const header = ['№', 'Номер отправления', 'Название товара', 'Артикул'];
-
-        // 3. Создаём массив данных (без заголовка в json_to_sheet)
         const dataRows = sortedData.map((item, idx) => [
             idx + 1,
             item.number,
             item.name,
             item.article
         ]);
-
-        // 4. Объединяем заголовок + данные
         const allRows = [header, ...dataRows];
-
-        // 5. Преобразуем в лист (через aoa_to_sheet — оптимизировано для больших массивов)
         const ws = XLSX.utils.aoa_to_sheet(allRows);
-
-        // 6. Добавляем лист в книгу
-        XLSX.utils.book_append_sheet(wb, ws, 'Лист подбора');
-
-        // 7. Оптимизация ширины колонок (опционально)
-        const colWidths = [
-            { wch: 6 },   // №
-            { wch: 20 },  // Номер отправления
-            { wch: 50 },  // Название товара
-            { wch: 12 }   // Артикул
+        
+        ws['!cols'] = [
+            { wch: 6 }, { wch: 20 }, { wch: 50 }, { wch: 12 }
         ];
-        ws['!cols'] = colWidths;
-
-        // 8. Сохраняем через write (синхронно, но для 10k+ строк работает быстро)
-        console.time('Excel generation');
+        
+        XLSX.utils.book_append_sheet(wb, ws, 'Лист подбора');
         const excelBuffer = XLSX.write(wb, {
             bookType: 'xlsx',
             type: 'array',
-            compression: true // Включаем сжатие для больших файлов
+            compression: true
         });
-        console.timeEnd('Excel generation');
 
-        // 9. Создаём Blob и скачиваем
         const excelBlob = new Blob([excelBuffer], {
             type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         });
         saveAs(excelBlob, 'noviy_list_podbora.xlsx');
-
-        console.log('✅ Excel успешно скачан (', sortedData.length, ' строк)');
+        console.log('✅ Excel скачан');
 
     } catch (error) {
         console.error('❌ Ошибка генерации Excel:', error);
-        alert('Ошибка при создании Excel: ' + error.message + '\n\nПопробуйте использовать меньший файл или обновить страницу.');
+        alert('Ошибка при создании Excel: ' + error.message);
     }
 }
 
 // ============================================================
-// СКАЧИВАНИЕ PDF (оптимизировано для 1000+ наклеек)
+// СКАЧИВАНИЕ PDF (ОПТИМИЗИРОВАНО ДЛЯ 3000+ НАКЛЕЕК)
+// BATCH_SIZE = 25 (максимальная стабильность)
 // ============================================================
 async function downloadPDF() {
     try {
         console.log('\n=== 📥 СКАЧИВАНИЕ PDF ===');
-        console.log('skPdfBytes:', skPdfBytes ? skPdfBytes.length : 'null');
-
+        
+        // Восстановление данных
         if (!skPdfBytes || skPdfBytes.length === 0) {
             try {
                 const base64Pdf = sessionStorage.getItem('skPdfBase64');
@@ -386,7 +343,6 @@ async function downloadPDF() {
                     for (let i = 0; i < binaryString.length; i++) {
                         skPdfBytes[i] = binaryString.charCodeAt(i);
                     }
-                    console.log('✅ Восстановлено из sessionStorage:', skPdfBytes.length, 'байт');
                 }
             } catch (err) {
                 console.error('❌ Ошибка восстановления:', err);
@@ -394,36 +350,21 @@ async function downloadPDF() {
         }
 
         if (!skPdfBytes || skPdfBytes.length === 0) {
-            throw new Error('PDF с наклейками не загружен. Пожалуйста, загрузите файл ШК заново.');
+            throw new Error('PDF с наклейками не загружен.');
         }
 
         if (Object.keys(skPages).length === 0) {
-            throw new Error('Страницы с наклейками не найдены. Проверьте файл ШК.');
+            throw new Error('Страницы с наклейками не найдены.');
         }
 
-        const { PDFDocument } = PDFLib;
-
-        console.log('Загрузка оригинального PDF...');
-        const originalPdf = await PDFDocument.load(skPdfBytes, {
-            updateMetadata: false,
-            ignoreEncryption: true
-        });
-
-        console.log('Страниц в оригинале:', originalPdf.getPageCount());
-        console.log('Нужно скопировать:', sortedData.length, 'наклеек');
-
-        const newPdf = await PDFDocument.create();
-        let copiedCount = 0;
+        // Подготовка списка страниц для копирования
+        const pagesToCopy = [];
         let notFoundCount = 0;
         let skippedNumbers = [];
 
-        // ✅ ПАКЕТНОЕ КОПИРОВАНИЕ (по 100 страниц за раз) для избежания переполнения памяти
-        const BATCH_SIZE = 100;
-        const pagesToCopy = [];
-
         for (const item of sortedData) {
             const pageIndex = skPages[item.number];
-            if (pageIndex !== undefined && pageIndex < originalPdf.getPageCount()) {
+            if (pageIndex !== undefined) {
                 pagesToCopy.push(pageIndex);
             } else {
                 console.warn(`⚠️ Наклейка ${item.number} не найдена в ШК`);
@@ -432,43 +373,59 @@ async function downloadPDF() {
             }
         }
 
-        console.log(`✅ Найдено страниц для копирования: ${pagesToCopy.length}`);
+        if (pagesToCopy.length === 0) {
+            throw new Error('Не удалось найти ни одной наклейки.');
+        }
 
-        // Копируем пакетами
+        const { PDFDocument } = PDFLib;
+        const newPdf = await PDFDocument.create();
+        
+        let copiedCount = 0;
+        const BATCH_SIZE = 25; // Максимальная стабильность для 3000+ страниц
+
+        // Основной цикл с пакетной обработкой и сбросом памяти
         for (let i = 0; i < pagesToCopy.length; i += BATCH_SIZE) {
             const batch = pagesToCopy.slice(i, i + BATCH_SIZE);
+            
+            // Загружаем оригинал заново для каждого пакета (очистка памяти браузера)
+            const originalPdf = await PDFDocument.load(skPdfBytes, {
+                updateMetadata: false,
+                ignoreEncryption: true
+            });
+
             const copiedPages = await newPdf.copyPages(originalPdf, batch);
             for (const page of copiedPages) {
                 newPdf.addPage(page);
             }
+            
             copiedCount += batch.length;
-            console.log(`🔄 Скопировано ${copiedCount} / ${pagesToCopy.length} страниц`);
+            
+            // Плавное обновление прогресс-бара с понятным текстом
+            const percent = Math.round((copiedCount / pagesToCopy.length) * 90) + 10; // От 10% до 100%
+            document.getElementById('progressFill').style.width = percent + '%';
+            document.getElementById('progressPercent').textContent = percent + '%';
+            document.getElementById('progressText').textContent = `Формирование PDF: ${copiedCount} / ${pagesToCopy.length} наклеек (обработано ${Math.round((copiedCount / pagesToCopy.length) * 100)}%)`;
 
-            // Даём браузеру время на сборку мусора
+            // Даем браузеру время на сборку мусора перед следующим пакетом
             await new Promise(resolve => setTimeout(resolve, 50));
         }
 
-        console.log('✅ Скопировано:', copiedCount);
-        console.log('⚠️ Не найдено:', notFoundCount);
-        if (skippedNumbers.length > 0) {
-            console.log('Пропущенные номера (первые 10):', skippedNumbers.slice(0, 10));
-        }
+        document.getElementById('progressText').textContent = 'Сохранение готового файла...';
+        document.getElementById('progressPercent').textContent = '99%';
 
-        if (copiedCount === 0) {
-            throw new Error('Не удалось скопировать ни одной наклейки.\n\nПроверьте:\n1. Что номера в ЛП совпадают с номерами в ШК\n2. Что файл ШК содержит наклейки');
-        }
-
-        // ✅ Сохраняем с оптимизацией (без сжатия для скорости)
         const pdfBytes = await newPdf.save({ useObjectStreams: false });
-
         const pdfBlob = new Blob([pdfBytes], { type: 'application/pdf' });
         saveAs(pdfBlob, 'nakleyki_po_poryadku.pdf');
 
-        console.log('✅ PDF создан и скачан');
+        document.getElementById('progressText').textContent = 'Файл скачан!';
+        document.getElementById('progressPercent').textContent = '100%';
+        document.getElementById('progressFill').style.width = '100%';
+
+        console.log('✅ PDF создан и скачан (', copiedCount, ' наклеек)');
 
     } catch (error) {
         console.error('❌ Ошибка создания PDF:', error);
-        alert('Ошибка при создании PDF: ' + error.message);
+        alert('Ошибка при создании PDF: ' + error.message + '\n\nПопробуйте перезагрузить страницу и загрузить файлы заново.');
     }
 }
 
@@ -482,7 +439,7 @@ function updateProgress(percent, text) {
 }
 
 // ============================================================
-// УНИВЕРСАЛЬНОЕ СОХРАНЕНИЕ ФАЙЛА
+// СОХРАНЕНИЕ ФАЙЛА
 // ============================================================
 function saveAs(blob, filename) {
     const url = URL.createObjectURL(blob);
