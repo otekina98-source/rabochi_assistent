@@ -1,0 +1,221 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #FAF8FF;
+    color: #1d1d1f;
+    line-height: 1.6;
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 40px 20px;
+}
+
+.header {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.header h1 {
+    font-size: 2.5em;
+    margin-bottom: 10px;
+}
+
+.subtitle {
+    color: #86868b;
+    font-size: 1.1em;
+}
+
+.search-box {
+    margin-bottom: 40px;
+}
+
+#searchInput {
+    width: 100%;
+    padding: 18px 25px;
+    font-size: 1.05em;
+    border: 2px solid #E6E6FA;
+    border-radius: 16px;
+    outline: none;
+    background: white;
+    transition: all 0.3s;
+}
+
+#searchInput:focus {
+    border-color: #D8BFD8;
+    box-shadow: 0 2px 12px rgba(216, 191, 216, 0.3);
+}
+
+.stores-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+}
+
+.store-card {
+    background: #E6E6FA;
+    border-radius: 16px;
+    padding: 30px 20px;
+    cursor: pointer;
+    transition: all 0.3s;
+    min-height: 120px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+}
+
+.store-card h3 {
+    font-size: 1.3em;
+    color: #1d1d1f;
+}
+
+.store-card p {
+    color: #1d1d1f;
+    font-size: 0.9em;
+    margin-top: 10px;
+}
+
+.store-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 24px rgba(216, 191, 216, 0.4);
+    background: #D8BFD8;
+}
+
+.store-items {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease-out, opacity 0.3s;
+    opacity: 0;
+    margin-top: 0;
+    width: 100%;
+}
+
+.store-card:hover .store-items {
+    max-height: 500px;
+    opacity: 1;
+    margin-top: 15px;
+}
+
+.store-items ul {
+    list-style: none;
+    padding: 0;
+}
+
+.store-items li {
+    padding: 12px 15px;
+    background: rgba(255, 255, 255, 0.7);
+    margin-bottom: 8px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: #1d1d1f;
+    font-size: 0.95em;
+    text-align: left;
+}
+
+.store-items li:hover {
+    background: white;
+    transform: translateX(5px);
+}
+
+/* Экраны */
+.screen {
+    background: white;
+    padding: 40px;
+    border-radius: 20px;
+    box-shadow: 0 4px 20px rgba(216, 191, 216, 0.2);
+}
+
+.back-btn {
+    background: #E6E6FA;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 1em;
+    margin-bottom: 25px;
+    color: #1d1d1f;
+    transition: all 0.2s;
+}
+
+.back-btn:hover {
+    background: #D8BFD8;
+}
+
+/* Инструкция */
+.instruction-content h2 {
+    font-size: 2em;
+    margin-bottom: 10px;
+}
+
+.instruction-content > p {
+    color: #86868b;
+    margin-bottom: 25px;
+}
+
+.instruction-steps ol {
+    padding-left: 25px;
+}
+
+.instruction-steps li {
+    margin-bottom: 15px;
+    font-size: 1.05em;
+}
+
+.message-template {
+    background: #FAF8FF;
+    padding: 25px;
+    border-radius: 14px;
+    margin: 25px 0;
+    border: 2px solid #E6E6FA;
+}
+
+.message-template h4 {
+    margin-bottom: 15px;
+}
+
+.message-template p {
+    background: white;
+    padding: 18px;
+    border-radius: 10px;
+    font-family: 'Courier New', monospace;
+    white-space: pre-wrap;
+    margin-bottom: 15px;
+}
+
+.copy-btn {
+    background: #D8BFD8;
+    color: #1d1d1f;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 1em;
+}
+
+.copy-btn:hover {
+    background: #C9A9C9;
+}
+
+.hidden {
+    display: none !important;
+}
+
+@media (max-width: 1200px) {
+    .stores-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 768px) {
+    .header h1 { font-size: 1.8em; }
+    .stores-grid { grid-template-columns: 1fr; }
+    .container { padding: 20px 15px; }
+}

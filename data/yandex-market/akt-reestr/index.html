@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Сверка АКТ и реестр — ЯндексМаркет</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <button class="back-btn" onclick="window.location.href='../../../index.html'">← В меню</button>
+        
+        <div class="sverka-header">
+            <h2>📄 Сверка АКТ и реестр</h2>
+            <p class="subtitle">ЯндексМаркет</p>
+        </div>
+
+        <div class="sverka-layout">
+            
+            <!-- Плашка 1: Инструкция -->
+            <div class="panel instruction-panel">
+                <div class="panel-header">
+                    <h3> Инструкция</h3>
+                </div>
+                <div class="panel-body">
+                    <ol class="instruction-steps">
+                        <li>
+                            <span class="step-num">1</span>
+                            <span>Загрузите PDF с АКТом</span>
+                        </li>
+                        <li>
+                            <span class="step-num">2</span>
+                            <span>Вставьте номера заказов из 1С в реестр</span>
+                        </li>
+                        <li>
+                            <span class="step-num">3</span>
+                            <span>Нажмите <strong>"НАЧАТЬ СВЕРКУ"</strong></span>
+                        </li>
+                        <li>
+                            <span class="step-num">4</span>
+                            <span>Дождитесь обработки</span>
+                        </li>
+                        <li>
+                            <span class="step-num">5</span>
+                            <span>Смотрите результаты ниже</span>
+                        </li>
+                    </ol>
+                </div>
+            </div>
+
+            <!-- Плашка 2: PDF с актом -->
+            <div class="panel upload-panel">
+                <div class="panel-header">
+                    <h3>📄 PDF с АКТом</h3>
+                </div>
+                <div class="panel-body">
+                    <div class="upload-area" id="pdfUploadArea">
+                        <input type="file" id="pdfFileInput" accept=".pdf" style="display:none">
+                        <button class="upload-btn" onclick="document.getElementById('pdfFileInput').click()">⬆️ Выбрать PDF</button>
+                        <p class="hint">или перетащите файл сюда</p>
+                        <p id="pdfFileName" class="file-name"></p>
+                    </div>
+                    <div id="pdfStatus" class="status"></div>
+                </div>
+            </div>
+
+            <!-- Плашка 3: Реестр -->
+            <div class="panel reestr-panel">
+                <div class="panel-header">
+                    <h3> Реестр номеров из 1С</h3>
+                </div>
+                <div class="panel-body">
+                    <textarea id="reestrText" placeholder="Вставьте номера заказов из 1С (каждый с новой строки)&#10;59378903936&#10;59386064257"></textarea>
+                    <div class="reestr-actions">
+                        <div class="source-switch">
+                            <label><input type="radio" name="src" value="text" checked onchange="toggleSource()"> Вставить текст</label>
+                            <label><input type="radio" name="src" value="file" onchange="toggleSource()"> Загрузить файл</label>
+                        </div>
+                        <input type="file" id="reestrFileInput" accept=".txt,.csv" style="display:none" onchange="loadReestrFile(event)">
+                        <button class="upload-btn small" id="reestrFileBtn" style="display:none" onclick="document.getElementById('reestrFileInput').click()">⬆️ Файл</button>
+                    </div>
+                    <p id="reestrFileName" class="file-name"></p>
+                </div>
+            </div>
+        </div>
+
+        <button class="start-btn" onclick="startSverka()" id="startBtn">▶️ НАЧАТЬ СВЕРКУ</button>
+
+        <div id="progressSection" class="progress-section hidden">
+            <div class="progress-stats">
+                <span id="progressText">Обработка...</span>
+                <span id="progressPercent">0%</span>
+            </div>
+            <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+            <div class="progress-details" id="progressDetails"></div>
+        </div>
+
+        <div id="resultsSection" class="results-section hidden">
+            <h3>📊 Расхождения</h3>
+            <div class="summary" id="summary"></div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr><th>Номер</th><th>В акте</th><th>В реестре</th><th>Статус</th></tr>
+                    </thead>
+                    <tbody id="resultsBody"></tbody>
+                </table>
+            </div>
+            <button class="export-btn" onclick="exportCSV()">📥 Скачать CSV</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

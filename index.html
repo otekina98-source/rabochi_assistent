@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🛠️ Рабочий Ассистент</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🛠️ Рабочий Ассистент</h1>
+            <p class="subtitle">Инструкции и сверки по магазинам</p>
+        </header>
+
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="🔍 Поиск по инструкциям и сверкам...">
+        </div>
+
+        <div class="stores-grid" id="storesGrid"></div>
+
+        <!-- Экран инструкции -->
+        <div id="instructionScreen" class="screen hidden">
+            <button class="back-btn" onclick="closeInstruction()">← Назад</button>
+            <div id="instructionContent"></div>
+        </div>
+    </div>
+
+    <script src="data/general/instructions.js"></script>
+    <script src="data/yandex-market/checks.js"></script>
+    <script src="data/wildberries/checks.js"></script>
+    <script src="data/ozon/checks.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
