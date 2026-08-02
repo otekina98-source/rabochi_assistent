@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Сверка по грузоместам — ЯндексМаркет</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <button class="back-btn" onclick="window.location.href='../../../index.html'">← В меню</button>
+        
+        <div class="sverka-header">
+            <h2>📦 Сверка по грузоместам</h2>
+            <p class="subtitle">ЯндексМаркет</p>
+        </div>
+
+        <div class="sverka-layout">
+            
+            <!-- Плашка 1: Инструкция -->
+            <div class="panel instruction-panel">
+                <div class="panel-header">
+                    <h3>📖 Инструкция</h3>
+                </div>
+                <div class="panel-body">
+                    <ol class="instruction-steps">
+                        <li>
+                            <span class="step-num">1</span>
+                            <span>Скачайте Excel файл "список заказов" из ЛК</span>
+                        </li>
+                        <li>
+                            <span class="step-num">2</span>
+                            <span>Удалите все столбцы кроме <strong>Номер заказа</strong> и <strong>Грузоместа</strong></span>
+                        </li>
+                        <li>
+                            <span class="step-num">3</span>
+                            <span>Скопируйте и вставьте в левое поле</span>
+                        </li>
+                        <li>
+                            <span class="step-num">4</span>
+                            <span>Вставьте номера из 1С вместе с грузоместами (удалите лишние столбцы)</span>
+                        </li>
+                        <li>
+                            <span class="step-num">5</span>
+                            <span>Нажмите <strong>"НАЧАТЬ СВЕРКУ"</strong></span>
+                        </li>
+                        <li>
+                            <span class="step-num">6</span>
+                            <span>Дождитесь обработки</span>
+                        </li>
+                        <li>
+                            <span class="step-num">7</span>
+                            <span>Смотрите результаты ниже</span>
+                        </li>
+                    </ol>
+                    
+                    <div class="example-block">
+                        <p class="example-title">Пример формата:</p>
+                        <img src="reestr-example.png" alt="Пример реестра" class="example-image">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Плашка 2: Список из ЛК -->
+            <div class="panel reestr-panel">
+                <div class="panel-header">
+                    <h3>📋 Список из ЛК</h3>
+                </div>
+                <div class="panel-body">
+                    <textarea id="lkText" placeholder="Формат: номер + табуляция + грузоместа&#10;59781196544	1&#10;59780774723	1&#10;59780556738	2"></textarea>
+                </div>
+            </div>
+
+            <!-- Плашка 3: Реестр из 1С -->
+            <div class="panel reestr-panel">
+                <div class="panel-header">
+                    <h3>📋 Реестр из 1С</h3>
+                </div>
+                <div class="panel-body">
+                    <textarea id="reestrText" placeholder="Формат: номер + табуляция + грузоместа&#10;59378903936	1&#10;59386064257	1&#10;59392740352	2"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <button class="start-btn" onclick="startSverka()" id="startBtn">▶️ НАЧАТЬ СВЕРКУ</button>
+
+        <div id="progressSection" class="progress-section hidden">
+            <div class="progress-stats">
+                <span id="progressText">Обработка...</span>
+                <span id="progressPercent">0%</span>
+            </div>
+            <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+            <div class="progress-details" id="progressDetails"></div>
+        </div>
+
+        <div id="resultsSection" class="results-section hidden">
+            <h3>📊 Расхождения по грузоместам</h3>
+            <div class="summary" id="summary"></div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Номер заказа</th>
+                            <th>Грузомест в ЛК</th>
+                            <th>Грузомест в 1С</th>
+                            <th>Разница</th>
+                            <th>Статус</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsBody"></tbody>
+                </table>
+            </div>
+            <button class="export-btn" onclick="exportCSV()">📥 Скачать CSV</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
