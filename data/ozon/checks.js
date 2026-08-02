@@ -11,7 +11,7 @@ const ozonChecks = [
     },
     {
         id: 'ozon-sverka-3',
-        title: 'Сформировать ЛП и ШК по порядку',
+        title: 'Сформировать ЛП и ШК по порядку ВРЕМЕННО НЕ РАБОТАЕТ',
         path: 'data/ozon/lp-sk/index.html'
     }
 ];

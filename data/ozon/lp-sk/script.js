@@ -23,80 +23,90 @@ async function handleLP(file) {
     
     try {
         const buffer = await file.arrayBuffer();
-        const workbook = XLSX.read(buffer, { type: 'array' });
-        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });
+        const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+        
+        console.log('📄 ЛП PDF страниц:', pdf.numPages);
         
         lpData = [];
-        let foundRows = 0;
         let skippedRows = 0;
         let skippedExamples = [];
         
-        // Пропускаем заголовок (первые 2-3 строки)
-        for (let i = 2; i < jsonData.length; i++) {
-            const row = jsonData[i];
+        // Читаем все страницы
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+            const page = await pdf.getPage(pageNum);
+            const content = await page.getTextContent();
             
-            // Пропускаем пустые строки
-            if (!row || row.length < 3) {
-                continue;
-            }
+            // Собираем текст с координатами
+            const items = content.items.map(item => ({
+                text: item.str,
+                x: Math.round(item.transform[4]),
+                y: Math.round(item.transform[5])
+            }));
             
-            // Берём ячейку с номером (может содержать порядковый номер + номер отправления)
-            const rawNumber = String(row[0]).trim();
-            
-            // Пропускаем заголовки
-            if (rawNumber === 'Номер отправления' || rawNumber === 'Артикул' || rawNumber === 'Товар') {
-                continue;
-            }
-            
-            // Ищем паттерн номера отправления: 8-10 цифр, дефис, 4 цифры, дефис, 1-2 цифры
-            // Примеры: 80202246-0314-1, 0130755045-0592-3, 72342969-0060-10
-            const match = rawNumber.match(/(\d{8,10}-\d{4}-\d{1,2})/);
-            
-            if (!match) {
-                skippedRows++;
-                if (skippedExamples.length < 5) {
-                    skippedExamples.push(`Строка ${i+1}: "${rawNumber}"`);
-                }
-                continue;
-            }
-            
-            const number = match[1];
-            const article = String(row[1]).replace(/\s/g, '').trim();
-            const name = row[2] ? String(row[2]).trim() : '';
-            
-            // Проверяем что артикул 6 цифр
-            if (!/^\d{6}$/.test(article)) {
-                skippedRows++;
-                if (skippedExamples.length < 5) {
-                    skippedExamples.push(`Строка ${i+1}: артикул "${article}"`);
-                }
-                continue;
-            }
-            
-            lpData.push({
-                number: number,
-                name: name,
-                article: article
+            // Группируем элементы по строкам (одинаковый Y)
+            const rows = {};
+            items.forEach(item => {
+                const yKey = item.y;
+                if (!rows[yKey]) rows[yKey] = [];
+                rows[yKey].push(item);
             });
-            foundRows++;
             
-            // Логируем первые 3 успешные строки
-            if (foundRows <= 3) {
-                console.log(`✅ Строка ${i+1}: номер="${number}", артикул="${article}", название="${name.substring(0, 50)}..."`);
+            // Сортируем строки сверху вниз (Y убывает)
+            const sortedY = Object.keys(rows).sort((a, b) => b - a);
+            
+            for (const yKey of sortedY) {
+                const rowItems = rows[yKey].sort((a, b) => a.x - b.x);
+                const rowText = rowItems.map(item => item.text).join(' ');
+                
+                // Ищем номер отправления (8-10 цифр - 4 цифры - 1-2 цифры)
+                const numberMatch = rowText.match(/(\d{8,10}-\d{4}-\d{1,2})/);
+                
+                if (!numberMatch) {
+                    continue;
+                }
+                
+                const number = numberMatch[1];
+                
+                // Ищем артикул (6 цифр) в той же строке
+                const articleMatch = rowText.match(/\b(\d{6})\b/);
+                
+                if (!articleMatch) {
+                    skippedRows++;
+                    if (skippedExamples.length < 3) {
+                        skippedExamples.push(`Стр.${pageNum}: нет артикула в "${rowText.substring(0, 100)}"`);
+                    }
+                    continue;
+                }
+                
+                const article = articleMatch[1];
+                
+                // Ищем название товара (текст после артикула)
+                const articleIndex = rowText.indexOf(article);
+                const name = rowText.substring(articleIndex + 6).trim();
+                
+                lpData.push({
+                    number: number,
+                    article: article,
+                    name: name
+                });
+                
+                // Логируем первые 3 успешные строки
+                if (lpData.length <= 3) {
+                    console.log(`✅ Стр.${pageNum}: номер="${number}", артикул="${article}", название="${name.substring(0, 50)}..."`);
+                }
             }
         }
         
         console.log('\n📊 ИТОГИ ЗАГРУЗКИ ЛП:');
-        console.log('  ✅ Загружено:', foundRows, 'товаров');
-        console.log('  ⚠️ Пропущено:', skippedRows, 'строк');
+        console.log('  ✅ Загружено:', lpData.length, 'товаров');
+        console.log('  ️ Пропущено:', skippedRows, 'строк');
         if (skippedExamples.length > 0) {
             console.log('  Примеры пропущенных:', skippedExamples);
         }
         console.log('  📋 Первые 3:', lpData.slice(0, 3));
         console.log('  📋 Последние 3:', lpData.slice(-3));
         
-        updateStatus('lpStatus', '✅', `Загружено: ${foundRows} товаров`);
+        updateStatus('lpStatus', '✅', `Загружено: ${lpData.length} товаров`);
         checkReady();
     } catch (err) {
         console.error('❌ Ошибка ЛП:', err);
@@ -131,7 +141,7 @@ async function handleSK(file) {
             const content = await page.getTextContent();
             const pageText = content.items.map(it => it.str).join(' ');
             
-            // Ищем номер отправления на странице (8-10 цифр - 4 цифры - 1-2 цифры)
+            // Ищем номер отправления на странице
             const pattern = /\d{8,10}-\d{4}-\d{1,2}/g;
             const matches = pageText.match(pattern);
             
@@ -141,7 +151,6 @@ async function handleSK(file) {
         }
         
         console.log('✅ Найдено наклеек:', Object.keys(skPages).length);
-        console.log('  Примеры:', Object.keys(skPages).slice(0, 5));
         updateStatus('skStatus', '✅', `Загружено: ${Object.keys(skPages).length} наклеек`);
         checkReady();
     } catch (err) {
@@ -414,7 +423,7 @@ async function downloadPDF() {
         console.log('\n' + '='.repeat(60));
         console.log('✅ ВСЕ PDF СОЗДАНЫ И СКАЧАНЫ');
         console.log('='.repeat(60));
-        console.log('\n📋 ИТОГОВАЯ СВОДКА:');
+        console.log('\n ИТОГОВАЯ СВОДКА:');
         console.log('  Всего должно быть:', sortedData.length);
         console.log('  Реально скопировано:', totalCopied);
         console.log('  Создано файлов:', totalFiles);
