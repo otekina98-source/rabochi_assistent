@@ -30,6 +30,7 @@ async function handleLP(file) {
         lpData = [];
         let foundRows = 0;
         let skippedRows = 0;
+        let skippedExamples = [];
         
         // Пропускаем заголовок (первые 2-3 строки)
         for (let i = 2; i < jsonData.length; i++) {
@@ -43,15 +44,20 @@ async function handleLP(file) {
             // Берём ячейку с номером (может содержать порядковый номер + номер отправления)
             const rawNumber = String(row[0]).trim();
             
+            // Пропускаем заголовки
+            if (rawNumber === 'Номер отправления' || rawNumber === 'Артикул' || rawNumber === 'Товар') {
+                continue;
+            }
+            
             // Ищем паттерн номера отправления: 8-10 цифр, дефис, 4 цифры, дефис, 1-2 цифры
-            // Примеры: 80202246-0314-1, 0130755045-0592-3
+            // Примеры: 80202246-0314-1, 0130755045-0592-3, 72342969-0060-10
             const match = rawNumber.match(/(\d{8,10}-\d{4}-\d{1,2})/);
             
             if (!match) {
-                if (skippedRows < 3) {
-                    console.log(`⚠️ Строка ${i+1}: не найден номер отправления в "${rawNumber}"`);
-                }
                 skippedRows++;
+                if (skippedExamples.length < 5) {
+                    skippedExamples.push(`Строка ${i+1}: "${rawNumber}"`);
+                }
                 continue;
             }
             
@@ -61,10 +67,10 @@ async function handleLP(file) {
             
             // Проверяем что артикул 6 цифр
             if (!/^\d{6}$/.test(article)) {
-                if (skippedRows < 3) {
-                    console.log(`⚠️ Строка ${i+1}: неверный артикул "${article}"`);
-                }
                 skippedRows++;
+                if (skippedExamples.length < 5) {
+                    skippedExamples.push(`Строка ${i+1}: артикул "${article}"`);
+                }
                 continue;
             }
             
@@ -83,14 +89,18 @@ async function handleLP(file) {
         
         console.log('\n📊 ИТОГИ ЗАГРУЗКИ ЛП:');
         console.log('  ✅ Загружено:', foundRows, 'товаров');
-        console.log('  ️ Пропущено:', skippedRows, 'строк');
-        console.log('  📋 Примеры:', lpData.slice(0, 3));
+        console.log('  ⚠️ Пропущено:', skippedRows, 'строк');
+        if (skippedExamples.length > 0) {
+            console.log('  Примеры пропущенных:', skippedExamples);
+        }
+        console.log('  📋 Первые 3:', lpData.slice(0, 3));
+        console.log('  📋 Последние 3:', lpData.slice(-3));
         
         updateStatus('lpStatus', '✅', `Загружено: ${foundRows} товаров`);
         checkReady();
     } catch (err) {
         console.error('❌ Ошибка ЛП:', err);
-        updateStatus('lpStatus', '', 'Ошибка: ' + err.message);
+        updateStatus('lpStatus', '❌', 'Ошибка: ' + err.message);
     }
 }
 
@@ -121,7 +131,7 @@ async function handleSK(file) {
             const content = await page.getTextContent();
             const pageText = content.items.map(it => it.str).join(' ');
             
-            // Ищем номер отправления на странице
+            // Ищем номер отправления на странице (8-10 цифр - 4 цифры - 1-2 цифры)
             const pattern = /\d{8,10}-\d{4}-\d{1,2}/g;
             const matches = pageText.match(pattern);
             
@@ -131,6 +141,7 @@ async function handleSK(file) {
         }
         
         console.log('✅ Найдено наклеек:', Object.keys(skPages).length);
+        console.log('  Примеры:', Object.keys(skPages).slice(0, 5));
         updateStatus('skStatus', '✅', `Загружено: ${Object.keys(skPages).length} наклеек`);
         checkReady();
     } catch (err) {
@@ -317,7 +328,7 @@ async function downloadPDF() {
             throw new Error('Ни одна наклейка не найдена в ШК! Проверите файл ШК.');
         }
         
-        // Если наклеек больше 999, разбиваем на несколько файлов
+        // Разбиваем на файлы по 999 наклеек
         const MAX_PER_FILE = 999;
         const totalFiles = Math.ceil(sortedData.length / MAX_PER_FILE);
         
@@ -352,6 +363,7 @@ async function downloadPDF() {
             
             const newPdf = await PDFDocument.create();
             let copiedCount = 0;
+            let notFoundInBatch = 0;
             
             for (let i = 0; i < batch.length; i++) {
                 const item = batch[i];
@@ -365,10 +377,15 @@ async function downloadPDF() {
                     } catch (err) {
                         console.error(`  ❌ Ошибка копирования ${item.number}:`, err.message);
                     }
+                } else {
+                    notFoundInBatch++;
                 }
             }
             
             console.log('  ✅ Скопировано:', copiedCount);
+            if (notFoundInBatch > 0) {
+                console.log('  ⚠️ Не найдено:', notFoundInBatch);
+            }
             
             // Сохраняем файл
             const pdfBytes = await newPdf.save();
@@ -378,6 +395,7 @@ async function downloadPDF() {
                 ? 'nakleyki_po_poryadku.pdf'
                 : `nakleyki_part_${fileIndex + 1}_of_${totalFiles}.pdf`;
             
+            console.log('  💾 Сохраняем:', filename, `(${(pdfBytes.length / 1024 / 1024).toFixed(2)} MB)`);
             saveAs(pdfBlob, filename);
             
             totalCopied += copiedCount;
@@ -389,8 +407,8 @@ async function downloadPDF() {
             if (progressFill) progressFill.style.width = progress + '%';
             if (progressText) progressText.textContent = `Файл ${fileIndex + 1} из ${totalFiles}... (${progress}%)`;
             
-            // Даём браузеру передохнуть
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // Даём браузеру передохнуть между файлами
+            await new Promise(resolve => setTimeout(resolve, 1000));
         }
         
         console.log('\n' + '='.repeat(60));
