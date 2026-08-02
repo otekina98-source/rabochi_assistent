@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Курьеры экспресс — ВБ</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <button class="back-btn" onclick="window.location.href='../../../index.html'">← В меню</button>
+        
+        <div class="sverka-header">
+            <h2>🚚 Курьеры экспресс</h2>
+            <p class="subtitle">Формирование файлов для назначения курьеров • ВБ</p>
+        </div>
+
+        <div class="courier-layout">
+            
+            <!-- Плашка 1: Инструкция -->
+            <div class="panel instruction-panel">
+                <div class="panel-header">
+                    <h3>📖 Инструкция</h3>
+                </div>
+                <div class="panel-body">
+                    <ol class="instruction-steps">
+                        <li>
+                            <span class="step-num">1</span>
+                            <span>Загрузите Excel файл с данными курьеров</span>
+                        </li>
+                        <li>
+                            <span class="step-num">2</span>
+                            <span>Выберите нужные даты доставки</span>
+                        </li>
+                        <li>
+                            <span class="step-num">3</span>
+                            <span>Проверьте статус (по умолчанию "Ожидает курьера")</span>
+                        </li>
+                        <li>
+                            <span class="step-num">4</span>
+                            <span>Выберите склады (галочками)</span>
+                        </li>
+                        <li>
+                            <span class="step-num">5</span>
+                            <span>Нажмите <strong>"СФОРМИРОВАТЬ ФАЙЛЫ"</strong></span>
+                        </li>
+                        <li>
+                            <span class="step-num">6</span>
+                            <span>Скачаются 2 Word файла: с наименованиями и без</span>
+                        </li>
+                    </ol>
+                </div>
+            </div>
+
+            <!-- Плашка 2: Загрузка Excel -->
+            <div class="panel upload-panel">
+                <div class="panel-header">
+                    <h3>📊 Excel с данными</h3>
+                </div>
+                <div class="panel-body">
+                    <div class="upload-area" id="excelUploadArea">
+                        <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display:none">
+                        <button class="upload-btn" onclick="document.getElementById('excelFileInput').click()">⬆️ Выбрать Excel</button>
+                        <p class="hint">или перетащите файл сюда</p>
+                        <p id="excelFileName" class="file-name"></p>
+                    </div>
+                    <div id="excelStatus" class="status"></div>
+                    <div id="dataPreview" class="data-preview hidden">
+                        <p class="preview-title">Загружено записей: <span id="recordCount">0</span></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Плашка 3: Фильтры -->
+            <div class="panel filters-panel">
+                <div class="panel-header">
+                    <h3>️ Фильтры</h3>
+                </div>
+                <div class="panel-body">
+                    <div class="filter-group">
+                        <label class="filter-label">📅 Дата доставки:</label>
+                        <div id="dateFilters" class="checkbox-group">
+                            <p class="empty-text">Сначала загрузите Excel</p>
+                        </div>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label class="filter-label">📋 Статус задания:</label>
+                        <input type="text" id="statusFilter" value="Ожидает курьера" class="filter-input">
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label class="filter-label">📦 Склад:</label>
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="warehouse" value="МБТ" checked>
+                                <span>МБТ</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="warehouse" value="СГТ" checked>
+                                <span>СГТ</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="warehouse" value="СПБ" checked>
+                                <span>СПБ</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <button class="start-btn" onclick="generateFiles()" id="generateBtn" disabled>
+            📥 СФОРМИРОВАТЬ ФАЙЛЫ
+        </button>
+
+        <div id="progressSection" class="progress-section hidden">
+            <div class="progress-stats">
+                <span id="progressText">Формирование...</span>
+                <span id="progressPercent">0%</span>
+            </div>
+            <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
