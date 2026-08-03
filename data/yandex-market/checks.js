@@ -1,17 +1,22 @@
 const ymChecks = [
     {
-        id: 'ym-sverka-1',
+        id: 'shk-reestr',
         title: 'Сверка ШК и реестр',
         path: 'data/yandex-market/shk-reestr/index.html'
     },
     {
-        id: 'ym-sverka-2',
+        id: 'akt-reestr',
         title: 'Сверка АКТ и реестр',
         path: 'data/yandex-market/akt-reestr/index.html'
     },
     {
-        id: 'ym-sverka-3',
+        id: 'gruzomesta',
         title: 'Сверка по грузоместам',
         path: 'data/yandex-market/gruzomesta/index.html'
+    },
+    {
+        id: 'sk-otgruzka',
+        title: 'Сформировать ШК для отгрузки',
+        path: 'data/yandex-market/sk-otgruzka/index.html'
     }
 ];

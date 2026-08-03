@@ -300,3 +300,42 @@ body {
     font-size: 1.2em;
     margin: 0;
 }
+/* Стили для textarea отмен */
+.cancellations-textarea {
+    width: 100%;
+    min-height: 120px;
+    padding: 12px;
+    border: 2px solid #E6E6FA;
+    border-radius: 8px;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    resize: vertical;
+    margin-top: 8px;
+}
+
+.cancellations-textarea:focus {
+    outline: none;
+    border-color: #005BFF;
+}
+
+/* Предупреждение в инструкции */
+.warning-box {
+    background: #FFF9E6;
+    border: 2px solid #FFE082;
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 15px;
+    font-size: 0.9em;
+}
+
+/* Название в превью наклеек */
+.sticker-name {
+    display: block;
+    font-size: 0.85em;
+    color: #86868b;
+    margin-top: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 300px;
+}
