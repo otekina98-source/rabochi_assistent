@@ -82,7 +82,6 @@ function openInstruction(store, item) {
                     <ul>
                         <li><a href="data/ozon/list-reestr/index.html" class="sverka-link">Сверка Лист отгрузки и реестр</a> — сравнивает номера отгрузок из листа отгрузки (PDF) с номерами из 1С</li>
                         <li><a href="data/ozon/podbor-reestr/index.html" class="sverka-link">Сверка Лист подбора и реестр</a> — сравнивает номера из листа подбора (PDF) с реестром</li>
-                        <li><a href="data/ozon/lp-sk/index.html" class="sverka-link">Сформировать ЛП и ШК по порядку</a> — создаёт новый лист подбора и наклейки, отсортированные по алфавиту</li>
                     </ul>
                     
                     <h4>🏪 Wildberries</h4>
