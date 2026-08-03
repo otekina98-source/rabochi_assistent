@@ -18,11 +18,9 @@ document.getElementById('ordersFileInput').addEventListener('change', e => { if 
 document.getElementById('priceFileInput').addEventListener('change', e => { if (e.target.files[0]) handlePrice(e.target.files[0]); });
 document.getElementById('skFileInput').addEventListener('change', e => { if (e.target.files[0]) handleSK(e.target.files[0]); });
 
-// --- ЧТЕНИЕ ФАЙЛОВ ---
-
 async function handleAct(file) {
     document.getElementById('actFileName').textContent = file.name;
-    updateStatus('actStatus', '', 'Чтение...');
+    updateStatus('actStatus', '🔄', 'АКТ: чтение...');
     try {
         const buffer = await file.arrayBuffer();
         const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
@@ -36,18 +34,18 @@ async function handleAct(file) {
         const matches = text.match(/\b(\d{11})\b/g);
         if (matches) matches.forEach(n => actOrderNumbers.add(n));
         updateStatus('actStatus', '✅', `АКТ: ${actOrderNumbers.size} номеров`);
+        checkReady();
     } catch (err) { updateStatus('actStatus', '❌', 'Ошибка: ' + err.message); }
 }
 
 async function handleOrders(file) {
     document.getElementById('ordersFileName').textContent = file.name;
-    updateStatus('ordersStatus', '', 'Чтение...');
+    updateStatus('ordersStatus', '🔄', 'Список заказов: чтение...');
     try {
         const data = new Uint8Array(await file.arrayBuffer());
         const wb = XLSX.read(data, { type: 'array' });
         const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' });
         if (rows.length < 2) throw new Error('Мало строк');
-        
         const headers = rows[0].map(h => String(h).toLowerCase().trim());
         let oIdx = headers.findIndex(h => h.includes('ваш номер заказа'));
         let sIdx = headers.findIndex(h => h.includes('ваш sku'));
@@ -64,12 +62,13 @@ async function handleOrders(file) {
             if (num && num.length >= 8 && sku) ordersData.push({ orderNumber: num, sku: sku, cargo: cargo });
         }
         updateStatus('ordersStatus', '✅', `Список заказов: ${ordersData.length} шт`);
+        checkReady();
     } catch (err) { updateStatus('ordersStatus', '❌', 'Ошибка: ' + err.message); }
 }
 
 function handlePrice(file) {
     document.getElementById('priceFileName').textContent = file.name;
-    updateStatus('priceStatus', '', 'Чтение...');
+    updateStatus('priceStatus', '🔄', 'ПРАЙС: чтение...');
     const r = new FileReader();
     r.onload = (e) => {
         try {
@@ -82,47 +81,91 @@ function handlePrice(file) {
                 if (sku && name && sku.length > 5) priceData[sku] = name;
             });
             updateStatus('priceStatus', '✅', `ПРАЙС: ${Object.keys(priceData).length} тов.`);
+            checkReady();
         } catch (err) { updateStatus('priceStatus', '❌', 'Ошибка: ' + err.message); }
     };
     r.readAsArrayBuffer(file);
 }
 
+// ==========================================================
+// СКАНИРОВАНИЕ ШТРИХКОДОВ ЧЕРЕЗ BarcodeDetector
+// ==========================================================
 async function handleSK(file) {
     document.getElementById('skFileName').textContent = file.name;
-    updateStatus('skStatus', '', 'Чтение...');
+    updateStatus('skStatus', '🔄', 'ШК: сканирование штрихкодов...');
     try {
         skFileBuffer = await file.arrayBuffer();
         const workBuffer = skFileBuffer.slice(0);
         skPdfBytes = new Uint8Array(workBuffer);
-        
         const pdf = await pdfjsLib.getDocument({ data: workBuffer }).promise;
+        
         skPages = {};
+        const barcodeDetector = new BarcodeDetector({ formats: ['code128', 'ean_13', 'code39'] });
+
         for (let i = 1; i <= pdf.numPages; i++) {
-            const page = await pdf.getPage(i);
-            const txt = (await page.getTextContent()).items.map(it => it.str).join(' ');
-            const m = txt.match(/\b(\d{11})\b/);
-            if (m) skPages[m[1]] = i - 1;
+            try {
+                const page = await pdf.getPage(i);
+                const viewport = page.getViewport({ scale: 2 });
+                
+                // Отрисовываем страницу как картинку (в память)
+                const canvas = document.createElement('canvas');
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                const ctx = canvas.getContext('2d');
+                await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+                
+                // Сканируем штрихкоды с этой картинки
+                const barcodes = await barcodeDetector.detect(canvas);
+                
+                if (barcodes && barcodes.length > 0) {
+                    // Берем первый найденный номер
+                    const rawCode = barcodes[0].rawValue;
+                    // Очищаем номер от лишних символов (оставляем только цифры)
+                    const cleanNumber = rawCode.replace(/[^0-9]/g, '');
+                    if (cleanNumber.length === 11) {
+                        skPages[cleanNumber] = i - 1;
+                        console.log(`📄 Страница ${i}: найден штрихкод ${cleanNumber}`);
+                    } else {
+                        console.warn(`⚠️ Страница ${i}: найден штрихкод ${rawCode}, но он не 11-значный (${cleanNumber})`);
+                    }
+                } else {
+                    console.warn(`⚠️ Страница ${i}: штрихкоды не обнаружены`);
+                }
+            } catch (e) {
+                console.warn(`⚠️ Ошибка сканирования страницы ${i}:`, e.message);
+            }
         }
-        updateStatus('skStatus', '✅', `ШК (общий): ${Object.keys(skPages).length} наклеек`);
+        
+        updateStatus('skStatus', '✅', `ШК: ${Object.keys(skPages).length} наклеек (по штрихкодам)`);
+        checkReady();
     } catch (err) { 
         updateStatus('skStatus', '❌', 'Ошибка: ' + err.message); 
     }
 }
 
-// --- ЛОГИКА ОБРАБОТКИ ---
-
 function checkReady() {
-    const ready = matchedOrders.length > 0 && Object.keys(priceData).length > 0 && skPdfBytes !== null;
+    const ready = actOrderNumbers.size > 0 && ordersData.length > 0 && Object.keys(priceData).length > 0 && Object.keys(skPages).length > 0;
     document.getElementById('configBtn').disabled = !ready;
-    document.getElementById('pdfBtn').disabled = !ready || (config.x === 0 && config.y === 0);
+    document.getElementById('previewBtn').disabled = !ready || (config.x === 0 && config.y === 0);
+    document.getElementById('pdfBtn').disabled = true; // PDF блокируется, пока не сделан предпросмотр
+}
+
+function updateStatus(elementId, icon, text) {
+    const el = document.getElementById(elementId);
+    el.innerHTML = `<span class="status-icon">${icon}</span><span>${text}</span>`;
 }
 
 function processOrders() {
     try {
         if (actOrderNumbers.size === 0) return alert('Загрузите АКТ!');
         if (ordersData.length === 0) return alert('Загрузите Список заказов!');
+        if (Object.keys(priceData).length === 0) return alert('Загрузите Прайс!');
+        if (Object.keys(skPages).length === 0) return alert('Загрузите ШК (в нём должны быть штрихкоды)!');
         
-        showProgress('Поиск совпадений...', 10);
+        document.getElementById('processBtn').disabled = true;
+        document.getElementById('progressSection').classList.remove('hidden');
+        updateProgress(10, 'Поиск совпадений...');
+        
         matchedOrders = ordersData.filter(o => actOrderNumbers.has(o.orderNumber) && o.cargo === 1);
         
         finalData = [];
@@ -137,13 +180,23 @@ function processOrders() {
             document.getElementById('processBtn').disabled = false;
         }, 500);
         alert(`✅ Найдено ${matchedOrders.length} заказов`);
-        showPreview();
         checkReady();
-    } catch (e) { alert('Ошибка: ' + e.message); hideProgress(); }
+    } catch (e) { 
+        alert('Ошибка: ' + e.message); 
+        document.getElementById('progressSection').classList.add('hidden');
+        document.getElementById('processBtn').disabled = false;
+    }
 }
 
-// --- НАСТРОЙКА НА ХОЛСТЕ ---
+function updateProgress(percent, text) {
+    document.getElementById('progressFill').style.width = percent + '%';
+    document.getElementById('progressPercent').textContent = percent + '%';
+    document.getElementById('progressText').textContent = text;
+}
 
+// ==========================================
+// НАСТРОЙКА НА ХОЛСТЕ
+// ==========================================
 async function openConfig() {
     if (!skFileBuffer) return alert('Сначала загрузите ШК (общий файл)!');
     if (finalData.length === 0) return alert('Сначала нажмите "ОБРАБОТАТЬ"!');
@@ -204,64 +257,4 @@ function drawLabel(ctx) {
 
     let currentY = config.y;
     for (let i = lines.length - 1; i >= 0; i--) {
-        ctx.fillText(lines[i], config.x, currentY);
-        currentY -= config.fontSize * 1.2;
-    }
-}
-
-function setupCanvasEvents() {
-    const canvas = document.getElementById('configCanvas');
-    const newCanvas = canvas.cloneNode(true);
-    canvas.parentNode.replaceChild(newCanvas, canvas);
-    
-    newCanvas.addEventListener('mousedown', (e) => {
-        const rect = newCanvas.getBoundingClientRect();
-        const scaleX = newCanvas.width / rect.width;
-        const scaleY = newCanvas.height / rect.height;
-        const clickX = (e.clientX - rect.left) * scaleX;
-        const clickY = (e.clientY - rect.top) * scaleY;
-
-        const ctx = newCanvas.getContext('2d');
-        ctx.font = `${config.fontWeight} ${config.fontSize}pt Helvetica`;
-        const tw = ctx.measureText(currentSampleOrder.name).width;
-        const th = config.fontSize * 1.2;
-
-        if (clickX >= config.x && clickX <= config.x + Math.min(tw, config.maxWidth) + 20 &&
-            clickY >= config.y - th - 10 && clickY <= config.y + 10) {
-            isDragging = true;
-            dragOffsetX = clickX - config.x;
-            dragOffsetY = clickY - config.y;
-        } else {
-            config.x = Math.round(clickX);
-            config.y = Math.round(clickY);
-            drawLabel(ctx);
-        }
-    });
-
-    newCanvas.addEventListener('mousemove', (e) => {
-        if (!isDragging) return;
-        const rect = newCanvas.getBoundingClientRect();
-        const scaleX = newCanvas.width / rect.width;
-        const scaleY = newCanvas.height / rect.height;
-        config.x = Math.round((e.clientX - rect.left) * scaleX - dragOffsetX);
-        config.y = Math.round((e.clientY - rect.top) * scaleY - dragOffsetY);
-        drawLabel(newCanvas.getContext('2d'));
-    });
-
-    window.addEventListener('mouseup', () => { isDragging = false; });
-}
-
-function closeConfig() { document.getElementById('configOverlay').style.display = 'none'; }
-
-function saveConfig() {
-    if (config.x === 0 && config.y === 0) return alert('Кликните по месту на наклейке!');
-    document.getElementById('configOverlay').style.display = 'none';
-    document.getElementById('pdfBtn').disabled = false;
-    alert('✅ Настройки сохранены! Скачайте PDF.');
-}
-
-// --- ПРЕВЬЮ И СКАЧИВАНИЕ ---
-
-function showPreview() {
-    document.getElementById('resultSection').classList.remove('hidden');
-    document.getElementById('tableCount').textContent = final
+        ctx.fill

@@ -16,7 +16,7 @@ const ymChecks = [
     },
     {
         id: 'sk-otgruzka',
-        title: 'Сформировать ШК для отгрузки',
+        title: 'Сформировать ШК для отгрузки НЕ РАБОТАЕТ',
         path: 'data/yandex-market/sk-otgruzka/index.html'
     }
 ];
