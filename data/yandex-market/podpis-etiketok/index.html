@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Подпись этикеток — Рабочий Ассистент</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #FAF8FF; color: #1d1d1f; line-height: 1.6; min-height: 100vh;
+        }
+        .back-link {
+            display: inline-block; background: #E6E6FA; border: none; padding: 10px 22px;
+            border-radius: 10px; color: #1d1d1f; text-decoration: none; font-size: 1em; transition: all 0.2s;
+        }
+        .back-link:hover { background: #D8BFD8; color: #1d1d1f; }
+        .page-title { font-size: 2em; font-weight: 700; margin: 14px 0 0 0; }
+        .step-container { display: none; animation: fadeIn 0.3s ease; }
+        .step-container.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .card { background: #E6E6FA; border: none; border-radius: 16px; }
+        .card-header {
+            background: #D8BFD8; color: #1d1d1f; border: none;
+            border-radius: 16px 16px 0 0 !important; font-weight: 700;
+        }
+        .card-body { background: #E6E6FA; border-radius: 0 0 16px 16px; }
+        .btn-primary, .btn-success {
+            background: #D8BFD8; border: none; color: #1d1d1f; font-weight: 600;
+            border-radius: 10px; padding: 12px 24px;
+        }
+        .btn-primary:hover, .btn-success:hover { background: #C9A9C9; color: #1d1d1f; }
+        .btn-light { background: rgba(255,255,255,0.7); color: #1d1d1f; border: none; border-radius: 10px; }
+        .btn-light:hover { background: #ffffff; color: #1d1d1f; }
+        .btn-outline-secondary { background: #E6E6FA; border: none; color: #1d1d1f; border-radius: 10px; }
+        .drop-zone {
+            border: 2px dashed #D8BFD8; border-radius: 16px; transition: all 0.2s; cursor: pointer;
+            min-height: 200px; display: flex; align-items: center; justify-content: center;
+            flex-direction: column; background: rgba(255,255,255,0.7);
+        }
+        .drop-zone.dragover { border-color: #C9A9C9; background: #ffffff; }
+        #pdfPreviewArea {
+            position: relative; height: 70vh; background: #FAF8FF; display: flex;
+            align-items: center; justify-content: center; overflow: hidden;
+            border: 1px solid #E6E6FA; border-radius: 16px;
+        }
+        #previewWrapper { position: relative; box-shadow: 0 2px 12px rgba(216,191,216,0.5); }
+        #pdfCanvas { display: block; }
+        .overlay-box {
+            position: absolute; border: 2px solid #C9A9C9; background: rgba(216,191,216,0.15);
+            cursor: move; resize: both; overflow: hidden; min-width: 10px; min-height: 4px;
+        }
+        .stats-card { border-left: 4px solid #D8BFD8; background: rgba(255,255,255,0.7); border-radius: 10px; }
+        .table-responsive { max-height: 500px; overflow-y: auto; border-radius: 10px; }
+        .table-light { --bs-table-bg: #D8BFD8; }
+        .form-control, .form-select { border: 2px solid #E6E6FA; border-radius: 10px; background: #ffffff; }
+        .form-control:focus, .form-select:focus { border-color: #D8BFD8; box-shadow: none; }
+        .progress { background: #E6E6FA; border-radius: 10px; }
+        .progress-bar { background: #D8BFD8; color: #1d1d1f; }
+        .alert-info { background: rgba(255,255,255,0.7); border: 1px solid #E6E6FA; color: #1d1d1f; }
+        .alert-warning { background: #FFF9E6; border: 2px solid #FFE082; color: #1d1d1f; }
+        .text-muted { color: #86868b !important; }
+        input[type="range"] { accent-color: #D8BFD8; }
+        textarea.form-control { font-family: 'Courier New', monospace; font-size: 14px; }
+    </style>
+</head>
+<body class="container py-4">
+    <div class="mb-4">
+        <a href="../../../index.html" class="back-link">← Назад к ассистенту</a>
+        <h2 class="page-title">🖨️ Подпись этикеток</h2>
+        <div class="text-muted">ЯндексМаркет · автоматическая подпись названий товаров на этикетках</div>
+    </div>
+
+        <div class="card shadow-sm mb-4">
+        <div class="card-header" style="cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#instructionBlock">
+            📖 Как пользоваться «Подпись этикеток» (нажмите, чтобы свернуть/развернуть)
+        </div>
+        <div id="instructionBlock" class="collapse show">
+            <div class="card-body">
+                <p class="small text-muted mb-2">Excel со списком заказов должен выглядеть так (колонки «Ваш номер заказа», «Ваш SKU», «Грузоместа»):</p>
+                <img src="orders-example.png" alt="Пример Excel со списком заказов" style="max-width:480px; width:100%; border:2px solid #E6E6FA; border-radius:10px; margin-bottom:15px;">
+                <ol style="margin:0; padding-left:22px;">
+                    <li class="mb-2">Скачайте Excel с заказами из ЛК и перетащите в первое окно. Файл не конвертируйте. Обязательно удалите лишние колонки.</li>
+                    <li class="mb-2">Заказы с «Грузоместом» больше 1 исключаются автоматически — их наклейки удаляются из готового PDF.</li>
+                    <li class="mb-2">При необходимости добавьте номера в поле «Исключить заказы вручную» (если у вас есть заказы, которые ранее отгружены, но попали в АКТ и ШК) — они не попадут в таблицу, а их наклейки удалятся. Поле пустое — обрабатываются все.</li>
+                    <li class="mb-2">Загрузите прайс и нажмите «Сопоставить данные».</li>
+                    <li class="mb-2">Проверьте таблицу: ✅ — название найдено, ❌ — не найдено. При необходимости скачайте Excel с результатом. Если какое-то название не нашлось, то замените Прайс на новый.</li>
+                    <li class="mb-2">Загрузите PDF с этикетками. Пунктирная рамка — место, где будет напечатано название. Рамку можно двигать. Поставьте текст именно в то место, в котором будет название.</li>
+                    <li class="mb-2">Нажмите «Начать обработку»: программа сама распознает номера заказов на наклейках и вставит названия из прайса.</li>
+                    <li>Скачайте готовый PDF </li>
+                </ol>
+                <p class="small text-muted mt-3 mb-0">При первом запуске нужен интернет (загружается модуль распознавания). Файлы никуда не отправляются — всё работает в вашем браузере.</p>
+            </div>
+        </div>
+    </div>
+<div class="progress mb-4" style="height: 5px;">
+        <div id="globalProgress" class="progress-bar" role="progressbar" style="width: 0%"></div>
+    </div>
+
+    <!-- STEP 1 -->
+    <div id="step1" class="step-container active">
+        <div class="card shadow-sm">
+            <div class="card-header">1. Загрузка заказов</div>
+            <div class="card-body">
+                <div class="drop-zone" id="ordersDropZone">
+                    <p class="mt-2 mb-0">Перетащите Excel с заказами сюда</p>
+                    <small class="text-muted">Поддерживаются .xlsx, .xls</small>
+                    <input type="file" accept=".xlsx,.xls" class="d-none" id="ordersInput">
+                </div>
+
+                <div class="mt-3">
+                    <label class="form-label small mb-1">Исключить заказы вручную (по одному номеру в строке)</label>
+                    <textarea id="manualExcludeInput" class="form-control" rows="3" placeholder="Например:&#10;59688770240&#10;59773992450"></textarea>
+                    <small class="text-muted">Эти номера не попадут в таблицу и готовый Excel, а их этикетки автоматически удалятся из готового PDF. Оставьте поле пустым — будут обрабатываться все заказы.</small>
+                </div>
+
+                <div id="ordersStats" class="mt-3 d-none">
+                    <div class="row g-3">
+                        <div class="col-md-4"><div class="stats-card p-3">Всего: <strong id="statTotal">0</strong></div></div>
+                        <div class="col-md-4"><div class="stats-card p-3">Исключено (>1 места): <strong id="statExcluded">0</strong></div></div>
+                        <div class="col-md-4"><div class="stats-card p-3">К обработке: <strong id="statRemaining">0</strong></div></div>
+                    </div>
+                    <button class="btn btn-primary mt-3 w-100" onclick="goToStep(2)">Далее: Загрузить прайс</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- STEP 2 -->
+    <div id="step2" class="step-container">
+        <div class="card shadow-sm">
+            <div class="card-header">2. Загрузка прайс-листа</div>
+            <div class="card-body">
+                <div class="drop-zone" id="priceDropZone">
+                    <p class="mt-2 mb-0">Перетащите прайс-лист (Артикул | Название)</p>
+                    <input type="file" accept=".xlsx,.xls" class="d-none" id="priceInput">
+                </div>
+                <div id="priceStats" class="mt-3 d-none alert alert-info">
+                    Загружено товаров: <strong id="priceCount">0</strong>
+                </div>
+                <button class="btn btn-primary mt-3 w-100" id="btnMatch" disabled onclick="matchAndShowTable()">Сопоставить данные</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- STEP 3 -->
+    <div id="step3" class="step-container">
+        <div class="card shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>3. Проверка сопоставления</span>
+                <button class="btn btn-sm btn-light" onclick="exportTable()">📥 Скачать Excel</button>
+            </div>
+            <div class="card-body">
+                <div class="input-group mb-3">
+                    <input type="text" class="form-control" placeholder="Поиск по заказу или товару..." onkeyup="filterTable(this.value)">
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle" id="resultTable">
+                        <thead class="table-light sticky-top">
+                            <tr><th>Заказ</th><th>SKU</th><th>Товар</th><th>Статус</th></tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mt-3">
+                    <span id="tableInfo"></span>
+                    <button class="btn btn-primary" onclick="goToStep(4)">Далее: Загрузить PDF</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- STEP 4 -->
+    <div id="step4" class="step-container">
+        <div class="card shadow-sm">
+            <div class="card-header">4. Настройка этикетки</div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-lg-8">
+                        <div class="drop-zone mb-3" id="pdfDropZone" style="min-height: 150px;">
+                            <p class="mt-2 mb-0">Загрузите PDF с этикетками</p>
+                            <input type="file" accept=".pdf" class="d-none" id="pdfInput">
+                        </div>
+                        <div id="pdfPreviewArea" class="d-none">
+                            <div id="previewWrapper">
+                                <canvas id="pdfCanvas"></canvas>
+                                <div id="overlayBox" class="overlay-box" style="top: 90%; left: 5%; width: 90%; height: 7%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6>Параметры текста</h6>
+
+                                <div class="row g-2 mb-2">
+                                    <div class="col">
+                                        <label class="form-label small mb-1">Размер</label>
+                                        <input type="number" class="form-control form-control-sm" id="cfgFontSize" value="5" min="1" max="72">
+                                    </div>
+                                    <div class="col">
+                                        <label class="form-label small mb-1">Интервал</label>
+                                        <input type="number" class="form-control form-control-sm" id="cfgLineSpacing" value="1.2" min="0.8" max="3" step="0.1">
+                                    </div>
+                                </div>
+
+                                <div class="row g-2 mb-2">
+                                    <div class="col">
+                                        <label class="form-label small mb-1">Выравнивание</label>
+                                        <select class="form-select form-select-sm" id="cfgAlign">
+                                            <option value="left" selected>Слева</option>
+                                            <option value="center">По центру</option>
+                                            <option value="right">Справа</option>
+                                        </select>
+                                    </div>
+                                    <div class="col">
+                                        <label class="form-label small mb-1">Цвет</label>
+                                        <select class="form-select form-select-sm" id="cfgColor">
+                                            <option value="#000000" selected>Чёрный</option>
+                                            <option value="#ff0000">Красный</option>
+                                            <option value="#0000ff">Синий</option>
+                                            <option value="#ffffff">Белый</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <label class="form-label small mb-1">Координаты зоны (%)</label>
+                                <div class="row g-1 mb-2">
+                                    <div class="col"><input type="number" class="form-control form-control-sm" id="cfgX" placeholder="X"></div>
+                                    <div class="col"><input type="number" class="form-control form-control-sm" id="cfgY" placeholder="Y"></div>
+                                    <div class="col"><input type="number" class="form-control form-control-sm" id="cfgW" placeholder="Шир."></div>
+                                    <div class="col"><input type="number" class="form-control form-control-sm" id="cfgH" placeholder="Выс."></div>
+                                </div>
+
+                                <div class="alert alert-warning small py-2">
+                                    Перетаскивайте рамку и тяните за правый нижний угол для изменения размера.
+                                </div>
+
+                                <button class="btn btn-success w-100 mt-2" id="btnStartProcess" disabled onclick="startProcessing()">
+                                    🚀 Начать обработку
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- STEP 5 -->
+    <div id="step5" class="step-container">
+        <div class="card shadow-sm text-center py-5">
+            <div id="processingView">
+                <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;"></div>
+                <h4>Обработка PDF...</h4>
+                <div class="progress mx-auto mt-3" style="max-width: 400px; height: 25px;">
+                    <div id="processProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%">0%</div>
+                </div>
+                <p class="text-muted mt-2" id="processStatus">Инициализация OCR...</p>
+                <p class="text-muted small">При первом запуске браузер скачивает языковые пакеты распознавания (~20 МБ) — далее они хранятся в кэше.</p>
+            </div>
+
+            <div id="resultView" class="d-none">
+                <h3 class="mt-3">Готово!</h3>
+                <p class="text-muted">Все страницы обработаны</p>
+                <div class="d-grid gap-3 col-md-6 mx-auto mt-4">
+                    <a id="downloadPdfBtn" class="btn btn-primary btn-lg">📄 Скачать PDF</a>
+                    <a id="downloadLogBtn" class="btn btn-outline-secondary btn-lg">📊 Скачать журнал</a>
+                    <a href="../../../index.html" class="btn btn-light">← Назад к ассистенту</a>
+                    <button class="btn btn-link" onclick="location.reload()">Новая обработка</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Локальные файлы: шрифт и fontkit (созданы командой node make-font.js) -->
+    <script src="font-data.js"></script>
+    <script src="fontkit.local.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.18.5/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
