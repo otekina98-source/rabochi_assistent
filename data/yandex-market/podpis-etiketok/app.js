@@ -16,6 +16,13 @@ const state = {
 
 let previewFontFamily = 'Arial, sans-serif';
 
+// Уровни сжатия (scale = разрешение рендера, quality = качество JPEG)
+const COMPRESS_PRESETS = {
+    medium: { scale: 2,   quality: 0.7 },
+    strong: { scale: 1.6, quality: 0.6 },
+    max:    { scale: 1.3, quality: 0.5 }
+};
+
 // ===== Нормализация и поиск =====
 function normalizeHeader(str) {
     if (str === null || str === undefined) return '';
@@ -251,6 +258,9 @@ async function initPdfPreview() {
     state.pageRotation = page.rotate || 0;
 
     const base = page.getViewport({ scale: 1 });
+    state.visualW = base.width;
+    state.visualH = base.height;
+
     let availW = container.clientWidth - 24;
     let availH = container.clientHeight - 24;
     if (availW <= 0) availW = 800;
@@ -291,6 +301,7 @@ async function initPdfPreview() {
     document.getElementById('btnStartProcess').disabled = false;
 
     ensureFineTuneControls();
+    ensureCompressControls();
     syncOverlayInputs();
     redrawTextPreview();
 }
@@ -320,16 +331,30 @@ function ensureFineTuneControls() {
     document.getElementById('cfgYShift').addEventListener('input', (e) => { state.textConfig.yShift = parseFloat(e.target.value); redrawTextPreview(); });
 }
 
-function redrawTextPreview() {
-    if (!textCanvas) return;
-    const ctx = textCanvas.getContext('2d');
-    ctx.clearRect(0, 0, textCanvas.width, textCanvas.height);
+// Переключатель сжатия (создаётся автоматически, index.html не трогаем)
+function ensureCompressControls() {
+    if (document.getElementById('compressRow')) return;
+    const btn = document.getElementById('btnStartProcess');
+    const wrap = document.createElement('div');
+    wrap.id = 'compressRow';
+    wrap.className = 'alert alert-info small py-2 mt-2';
+    wrap.innerHTML = `
+        <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="cfgCompress" checked>
+            <label class="form-check-label" for="cfgCompress">Сжать файл</label>
+        </div>
+        <select class="form-select form-select-sm mt-1" id="cfgCompressLevel">
+            <option value="medium">Среднее сжатие (лучшее качество)</option>
+            <option value="strong" selected>Сильное сжатие (рекомендую)</option>
+            <option value="max">Максимальное сжатие (меньший размер)</option>
+        </select>
+        <div class="text-muted" style="margin-top:4px;">Если выключить — файл соберётся в исходном (векторном) качестве.</div>
+    `;
+    btn.parentNode.insertBefore(wrap, btn);
+}
 
-    const cfg = state.textConfig;
-    const scale = state.previewScale;
-    const cw = textCanvas.width, ch = textCanvas.height;
-    if (!cw || !ch) return;
-
+// ===== Рисование текста на канвасе (общее для превью и сжатия) =====
+function paintLabel(ctx, cw, ch, scale, text, cfg) {
     const vx0 = (Number(cfg.x) / 100) * cw;
     const vy0 = (Number(cfg.y) / 100) * ch;
     const vw = (Number(cfg.width) / 100) * cw;
@@ -339,14 +364,11 @@ function redrawTextPreview() {
     const yShift = Number(cfg.yShift) || 0;
     const xShift = Number(cfg.xShift) || 0;
 
-    const first = state.tableData.find(r => r.productName);
-    const sample = first ? first.productName : 'тут будет название наклейки';
-
     ctx.font = `${fontSizePx}px ${previewFontFamily}`;
     ctx.fillStyle = cfg.color || '#000000';
     ctx.textBaseline = 'alphabetic';
 
-    const lines = wrapCanvasText(ctx, sample, Math.max(20, vw)).slice(0, 30);
+    const lines = wrapCanvasText(ctx, text, Math.max(20, vw)).slice(0, 30);
     const N = lines.length;
     const bottomVis = Math.min(vy0 + vh, ch - 4 * scale) + (yShift / 100) * ch;
 
@@ -358,6 +380,18 @@ function redrawTextPreview() {
         const baseY = bottomVis - fontSizePx * 0.2 - (N - 1 - idx) * lineHeightPx;
         ctx.fillText(line, Math.max(0, Math.min(cw, vx0 + dx + (xShift / 100) * cw)), baseY);
     });
+}
+
+function redrawTextPreview() {
+    if (!textCanvas) return;
+    const ctx = textCanvas.getContext('2d');
+    ctx.clearRect(0, 0, textCanvas.width, textCanvas.height);
+    const cw = textCanvas.width, ch = textCanvas.height;
+    if (!cw || !ch) return;
+
+    const first = state.tableData.find(r => r.productName);
+    const sample = first ? first.productName : 'тут будет название наклейки';
+    paintLabel(ctx, cw, ch, state.previewScale, sample, state.textConfig);
 }
 
 function wrapCanvasText(ctx, text, maxWidth) {
@@ -481,8 +515,6 @@ async function setupPreviewFont(bytes) {
 
 async function getFontkit() {
     if (window.fontkit) { state.fontkitSource = 'тег в index.html'; return window.fontkit; }
-
-    // Догружаем локальный файл обычным скриптом (работает при двойном клике)
     await new Promise((resolve) => {
         const s = document.createElement('script');
         s.src = 'fontkit.local.js';
@@ -491,7 +523,6 @@ async function getFontkit() {
         document.head.appendChild(s);
     });
     if (window.fontkit) { state.fontkitSource = 'fontkit.local.js'; return window.fontkit; }
-
     try {
         const mod = await import('https://cdn.jsdelivr.net/npm/@pdf-lib/fontkit@1.1.2/+esm');
         state.fontkitSource = 'CDN import';
@@ -501,7 +532,6 @@ async function getFontkit() {
     }
 }
 
-// Загрузка шрифта и fontkit при открытии страницы + диагностика, если что-то не так
 (async function initFont() {
     state.fontBytes = await loadFontBytes();
     if (state.fontBytes) await setupPreviewFont(state.fontBytes);
@@ -513,7 +543,7 @@ async function getFontkit() {
             '• font-data.js (base64 шрифта): ' + (window.DEJAVU_FONT_B64 ? '✅ есть' : '❌ НЕТ') + '\n' +
             '• Шрифт: ' + (state.fontBytes ? '✅ загружен (' + state.fontSource + ')' : '❌ НЕ загружен') + '\n' +
             '• fontkit: ' + (window.fontkit ? '✅ есть (' + state.fontkitSource + ')' : '❌ НЕТ (fontkit.local.js отсутствует или не сработал)') + '\n\n' +
-            'Пришлите скриншот этого окна и вывод команды «node make-font.js».'
+            'Примечание: при включённом сжатии шрифт/fontkit не требуются.'
         );
     }
 })();
@@ -535,23 +565,55 @@ async function startProcessing() {
     try {
         const pdfBytes = new Uint8Array(await state.pdfFile.arrayBuffer());
 
-        document.getElementById('processStatus').textContent = 'Загрузка PDF и шрифта...';
+        const compress = document.getElementById('cfgCompress').checked;
+        const preset = COMPRESS_PRESETS[document.getElementById('cfgCompressLevel').value] || COMPRESS_PRESETS.strong;
+
+        document.getElementById('processStatus').textContent = 'Загрузка PDF...';
         const pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
 
-        const fontBytes = state.fontBytes || await loadFontBytes();
-        const fontkitLib = await getFontkit();
-        if (!fontBytes || !fontkitLib) {
-            alert('Не удалось загрузить шрифт/fontkit. Запустите «node make-font.js» в папке модуля и обновите страницу.');
-            goToStep(4);
-            return;
+        // Шрифт и fontkit нужны только для векторного (несжатого) режима
+        let font = null;
+        if (!compress) {
+            const fontBytes = state.fontBytes || await loadFontBytes();
+            const fontkitLib = await getFontkit();
+            if (!fontBytes || !fontkitLib) {
+                alert('Не удалось загрузить шрифт/fontkit для векторного режима. Включите «Сжать файл» или запустите «node make-font.js».');
+                goToStep(4);
+                return;
+            }
+            pdfDoc.registerFontkit(fontkitLib);
+            font = await pdfDoc.embedFont(fontBytes);
         }
-        pdfDoc.registerFontkit(fontkitLib);
-        const font = await pdfDoc.embedFont(fontBytes);
 
         const pdfjs = await pdfjsLib.getDocument({ data: pdfBytes.slice() }).promise;
         const totalPages = pdfjs.numPages;
         const rotations = new Array(totalPages).fill(0);
         const results = new Array(totalPages).fill(null);
+
+        // Для режима сжатия: собираем PDF из JPEG по мере готовности
+        let outDocCompress = null;
+        let pageOut = null;
+        let assembleIdx = 0;
+        let skippedExcluded = 0;
+        if (compress) {
+            outDocCompress = await PDFLib.PDFDocument.create();
+            pageOut = new Array(totalPages).fill(undefined);
+        }
+
+        async function flushPages() {
+            while (assembleIdx < totalPages && pageOut[assembleIdx] !== undefined) {
+                const item = pageOut[assembleIdx];
+                if (item.skip) {
+                    skippedExcluded++;
+                } else {
+                    const img = await outDocCompress.embedJpg(item.jpeg);
+                    const p = outDocCompress.addPage([item.w, item.h]);
+                    p.drawImage(img, { x: 0, y: 0, width: item.w, height: item.h });
+                }
+                pageOut[assembleIdx] = null;
+                assembleIdx++;
+            }
+        }
 
         document.getElementById('processStatus').textContent = 'Загрузка языковых пакетов OCR...';
         const POOL = 2;
@@ -567,10 +629,12 @@ async function startProcessing() {
 
         async function runWorker(worker) {
             const cv = document.createElement('canvas');
+            const outCv = compress ? document.createElement('canvas') : null;
             while (next < totalPages) {
                 const idx = next++;
                 const page = await pdfjs.getPage(idx + 1);
                 rotations[idx] = page.rotate || 0;
+                const vp1 = page.getViewport({ scale: 1 });
                 const viewport = page.getViewport({ scale: 2 });
                 cv.width = viewport.width;
                 cv.height = viewport.height;
@@ -580,12 +644,34 @@ async function startProcessing() {
                 const text = data.text || '';
                 const orderId = extractOrderId(text, knownIds);
                 const productName = orderId ? state.mapping.get(orderId) : null;
+                const excluded = !!orderId && isExcluded(orderId);
 
-                if (!productName) {
-                    results[idx] = { status: 'NOT_FOUND', orderId, ocrText: text.substring(0, 200) };
+                if (excluded) {
+                    results[idx] = { status: 'EXCLUDED', orderId };
+                    if (compress) { pageOut[idx] = { skip: true }; await flushPages(); }
+                } else if (compress) {
+                    const s = preset.scale;
+                    const ow = Math.max(2, Math.round(vp1.width * s));
+                    const oh = Math.max(2, Math.round(vp1.height * s));
+                    outCv.width = ow;
+                    outCv.height = oh;
+                    const octx = outCv.getContext('2d');
+                    octx.imageSmoothingEnabled = true;
+                    octx.imageSmoothingQuality = 'high';
+                    octx.drawImage(cv, 0, 0, cv.width, cv.height, 0, 0, ow, oh);
+                    if (productName) paintLabel(octx, ow, oh, s, productName, cfg);
+                    const blob = await new Promise(res => outCv.toBlob(res, 'image/jpeg', preset.quality));
+                    const bytes = new Uint8Array(await blob.arrayBuffer());
+                    pageOut[idx] = { jpeg: bytes, w: vp1.width, h: vp1.height };
+                    results[idx] = { status: productName ? 'OK' : 'NOT_FOUND', orderId, productName };
+                    await flushPages();
                 } else {
-                    drawLabel(pdfDoc, idx, font, rotations[idx], productName, cfg);
-                    results[idx] = { status: 'OK', orderId, productName };
+                    if (productName) {
+                        drawLabel(pdfDoc, idx, font, rotations[idx], productName, cfg);
+                        results[idx] = { status: 'OK', orderId, productName };
+                    } else {
+                        results[idx] = { status: 'NOT_FOUND', orderId, ocrText: text.substring(0, 200) };
+                    }
                 }
 
                 done++;
@@ -604,16 +690,22 @@ async function startProcessing() {
 
         document.getElementById('processStatus').textContent = 'Сборка итогового PDF...';
 
-        const outDoc = await PDFLib.PDFDocument.create();
-        let skippedExcluded = 0;
-        for (let i = 0; i < totalPages; i++) {
-            const r = results[i];
-            if (r && r.orderId && isExcluded(r.orderId)) { skippedExcluded++; continue; }
-            const [copied] = await outDoc.copyPages(pdfDoc, [i]);
-            outDoc.addPage(copied);
+        let outBytes;
+        if (compress) {
+            await flushPages();
+            outBytes = await outDocCompress.save();
+        } else {
+            const outDoc = await PDFLib.PDFDocument.create();
+            for (let i = 0; i < totalPages; i++) {
+                const r = results[i];
+                if (r && r.orderId && isExcluded(r.orderId)) { skippedExcluded++; continue; }
+                const [copied] = await outDoc.copyPages(pdfDoc, [i]);
+                outDoc.addPage(copied);
+            }
+            outBytes = await outDoc.save();
         }
 
-        const outBytes = await outDoc.save();
+        const sizeMB = (outBytes.length / 1024 / 1024).toFixed(1);
         const pdfBlob = new Blob([outBytes], { type: 'application/pdf' });
         document.getElementById('downloadPdfBtn').href = URL.createObjectURL(pdfBlob);
         document.getElementById('downloadPdfBtn').download = 'processed_labels.pdf';
@@ -622,14 +714,17 @@ async function startProcessing() {
         results.forEach(r => {
             if (!r) notFound++;
             else if (r.status === 'OK') ok++;
-            else notFound++;
+            else if (r.status === 'NOT_FOUND') notFound++;
         });
+
         const wb = XLSX.utils.book_new();
         const wsData = [['Страница', 'Статус', 'Заказ', 'Товар', 'Распознанный текст']];
         results.forEach((r, idx) => {
             if (!r) { wsData.push([idx + 1, '⚠️ Не обработано', '-', '-', '-']); return; }
-            const excl = r.orderId && isExcluded(r.orderId);
-            const status = excl ? '🚫 Удалена (Грузоместа > 1 / вручную)' : (r.status === 'OK' ? '✅ Обработано' : '❌ Не найден');
+            let status;
+            if (r.status === 'EXCLUDED') status = '🚫 Удалена (Грузоместа > 1 / вручную)';
+            else if (r.status === 'OK') status = '✅ Обработано';
+            else status = '❌ Не найден';
             wsData.push([idx + 1, status, r.orderId || '-', r.productName || '-', r.ocrText || '-']);
         });
         XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(wsData), 'Журнал');
@@ -650,8 +745,10 @@ async function startProcessing() {
         }
         statsEl.innerHTML =
             `✅ Обработано: <strong>${ok}</strong> | ❌ Не найдено: <strong>${notFound}</strong> | ` +
-            `🚫 Удалено (грузоместа &gt; 1 / вручную): <strong>${skippedExcluded}</strong><br>` +
-            `Страниц в итоговом PDF: <strong>${totalPages - skippedExcluded}</strong> из ${totalPages}`;
+            `🚫 Удалено: <strong>${skippedExcluded}</strong><br>` +
+            `Страниц в итоговом PDF: <strong>${totalPages - skippedExcluded}</strong> из ${totalPages}<br>` +
+            `📦 Размер файла: <strong>${sizeMB} МБ</strong>` +
+            (compress && Number(sizeMB) > 70 ? '<br>Размер больше 70 МБ — выберите уровень «Максимальное сжатие» и повторите.' : '');
 
     } catch (err) {
         console.error(err);
