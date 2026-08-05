@@ -1,18 +1,15 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
-
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background: #FAF8FF;
     color: #1d1d1f;
     min-height: 100vh;
 }
-
 .container {
     max-width: 1400px;
     margin: 0 auto;
     padding: 30px 20px;
 }
-
 .back-btn {
     background: #E6E6FA;
     border: none;
@@ -23,58 +20,46 @@ body {
     margin-bottom: 20px;
     color: #1d1d1f;
 }
-
 .back-btn:hover { background: #D8BFD8; }
-
 .sverka-header h2 { font-size: 2em; margin-bottom: 5px; }
 .subtitle { color: #86868b; margin-bottom: 30px; }
-
-/* ===== ТРИ ОДИНАКОВЫЕ ПЛАШКИ ===== */
 .sverka-layout {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
     gap: 20px;
     margin-bottom: 25px;
 }
-
 .panel {
     background: white;
     border-radius: 16px;
     border: 2px solid #E6E6FA;
     display: flex;
     flex-direction: column;
-    min-height: 380px; /* одинаковая высота */
+    min-height: 380px;
 }
-
 .panel-header {
     padding: 18px 20px;
     border-bottom: 2px solid #E6E6FA;
     background: #FAF8FF;
     border-radius: 14px 14px 0 0;
 }
-
 .panel-header h3 {
     font-size: 1.15em;
     color: #1d1d1f;
 }
-
 .panel-body {
     padding: 20px;
     flex: 1;
     display: flex;
     flex-direction: column;
 }
-
-/* Инструкция */
 .instruction-panel {
     border-left: 4px solid #9B59B6;
 }
-
 .instruction-steps {
     list-style: none;
     padding: 0;
 }
-
 .instruction-steps li {
     display: flex;
     align-items: flex-start;
@@ -83,9 +68,7 @@ body {
     font-size: 0.92em;
     line-height: 1.4;
 }
-
 .instruction-steps li:last-child { margin-bottom: 0; }
-
 .step-num {
     flex-shrink: 0;
     width: 26px;
@@ -99,23 +82,7 @@ body {
     font-weight: 700;
     font-size: 0.85em;
 }
-
 .instruction-steps li strong { color: #1d1d1f; }
-
-.warning-block {
-    background: #FFF9E6;
-    border: 1px solid #FFE082;
-    border-radius: 10px;
-    padding: 12px 14px;
-    margin-top: auto; /* прижимает к низу */
-    font-size: 0.85em;
-    line-height: 1.4;
-    color: #1d1d1f;
-}
-
-.warning-block strong { color: #1d1d1f; }
-
-/* Зона загрузки PDF */
 .upload-area {
     border: 2px dashed #D8BFD8;
     border-radius: 12px;
@@ -129,9 +96,7 @@ body {
     justify-content: center;
     align-items: center;
 }
-
 .upload-area.dragover { border-color: #C9A9C9; background: #F0E6FF; }
-
 .upload-btn {
     background: #D8BFD8;
     color: #1d1d1f;
@@ -142,22 +107,16 @@ body {
     font-size: 1em;
     font-weight: 500;
 }
-
 .upload-btn:hover { background: #C9A9C9; }
-
 .upload-btn.small {
     padding: 10px 18px;
     font-size: 0.9em;
 }
-
 .hint { color: #86868b; font-size: 0.85em; margin-top: 10px; }
 .file-name { color: #1d1d1f; font-weight: 500; margin-top: 10px; font-size: 0.9em; }
-
 .status { margin-top: 10px; font-size: 0.85em; color: #86868b; }
 .status.success { color: #28a745; }
 .status.error { color: #dc3545; }
-
-/* Реестр */
 #reestrText {
     width: 100%;
     flex: 1;
@@ -171,10 +130,7 @@ body {
     outline: none;
     margin-bottom: 15px;
 }
-
 #reestrText:focus { border-color: #D8BFD8; }
-
-/* Действия под реестром — на одной линии */
 .reestr-actions {
     display: flex;
     align-items: center;
@@ -182,12 +138,10 @@ body {
     gap: 10px;
     margin-top: auto;
 }
-
 .source-switch {
     display: flex;
     gap: 15px;
 }
-
 .source-switch label {
     display: flex;
     align-items: center;
@@ -195,10 +149,7 @@ body {
     cursor: pointer;
     font-size: 0.9em;
 }
-
 .source-switch input { accent-color: #9B59B6; }
-
-/* Кнопка запуска */
 .start-btn {
     width: 100%;
     background: linear-gradient(135deg, #9B59B6, #8E44AD);
@@ -212,42 +163,72 @@ body {
     margin-bottom: 25px;
     letter-spacing: 0.5px;
 }
-
-.start-btn:hover:not(:disabled) { 
-    transform: translateY(-2px); 
-    box-shadow: 0 6px 20px rgba(155, 89, 182, 0.4); 
+.start-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(155, 89, 182, 0.4);
 }
-
 .start-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-/* Прогресс */
+/* ===== ПРОГРЕСС ===== */
 .progress-section { margin-bottom: 25px; }
 .progress-stats { display: flex; justify-content: space-between; margin-bottom: 8px; }
 .progress-bar { width: 100%; height: 12px; background: #E6E6FA; border-radius: 6px; overflow: hidden; }
-.progress-fill { height: 100%; background: linear-gradient(90deg, #9B59B6, #8E44AD); width: 0%; transition: width 0.3s; }
+.progress-fill { 
+    height: 100%; 
+    background: linear-gradient(90deg, #9B59B6, #8E44AD); 
+    width: 0%; 
+    transition: width 0.3s; 
+}
+
+/* ===== АНИМАЦИЯ ПРОГРЕССА (shimmer) ===== */
+.progress-section.processing .progress-fill {
+    background: linear-gradient(
+        90deg, 
+        #9B59B6 0%, 
+        #C9A9C9 25%, 
+        #9B59B6 50%, 
+        #C9A9C9 75%, 
+        #9B59B6 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s linear infinite;
+}
+@keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
 .progress-details { margin-top: 8px; font-size: 0.85em; color: #86868b; }
 
-/* Результаты */
+/* ===== РЕЗУЛЬТАТЫ ===== */
 .results-section h3 { font-size: 1.5em; margin-bottom: 20px; }
-
 .summary {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 15px;
     margin-bottom: 25px;
 }
-
 .summary-card {
     background: white;
     border: 2px solid #E6E6FA;
     border-radius: 12px;
     padding: 18px;
     text-align: center;
+    transition: all 0.3s ease;
+    animation: scaleIn 0.5s ease;
 }
-
+.summary-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 15px rgba(0,0,0,0.1);
+}
 .summary-card .num { font-size: 2em; font-weight: 700; display: block; color: #1d1d1f; }
 .summary-card .lbl { font-size: 0.85em; color: #86868b; margin-top: 5px; }
 .summary-card.miss { border-color: #dc3545; background: #fff5f5; }
+
+@keyframes scaleIn {
+    from { opacity: 0; transform: scale(0.8); }
+    to { opacity: 1; transform: scale(1); }
+}
 
 .table-wrapper {
     max-height: 500px;
@@ -256,16 +237,72 @@ body {
     border-radius: 12px;
     margin-bottom: 20px;
 }
-
 table { width: 100%; border-collapse: collapse; }
 th { background: #E6E6FA; padding: 14px; text-align: left; position: sticky; top: 0; color: #1d1d1f; }
 td { padding: 12px 14px; border-bottom: 1px solid #F0E6FF; font-family: 'Courier New', monospace; color: #1d1d1f; }
 tbody tr:hover { background: #FAF8FF; }
 
-.badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.85em; font-family: -apple-system, sans-serif; }
-.badge.miss { background: #f8d7da; color: #721c24; }
+/* Анимация появления строк */
+tbody tr {
+    animation: slideIn 0.3s ease;
+}
+@keyframes slideIn {
+    from { opacity: 0; transform: translateX(-15px); }
+    to { opacity: 1; transform: translateX(0); }
+}
 
-.export-btn {
+/* ===== ЦВЕТОВАЯ ИНДИКАЦИЯ СТАТУСОВ ===== */
+.badge { 
+    display: inline-block; 
+    padding: 6px 14px; 
+    border-radius: 20px; 
+    font-size: 0.85em; 
+    font-family: -apple-system, sans-serif;
+    font-weight: 600;
+    border: 2px solid transparent;
+    transition: all 0.3s ease;
+}
+.badge:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+}
+
+/* 🟣 Лиловый — только в наклейках */
+.badge.only_shk { 
+    background: #F0E6FF; 
+    color: #5B2C8E; 
+    border-color: #9B59B6; 
+}
+
+/* 🔴 Красный — только в реестре */
+.badge.only_reestr { 
+    background: #f8d7da; 
+    color: #721c24; 
+    border-color: #dc3545; 
+}
+
+/* 🟢 Зеленый — совпадение */
+.badge.match { 
+    background: #d4edda; 
+    color: #155724; 
+    border-color: #28a745; 
+}
+
+/* Подсветка строк таблицы по статусу */
+tbody tr.row-only_shk { 
+    background: #FAF0FF; 
+    border-left: 4px solid #9B59B6; 
+}
+tbody tr.row-only_reestr { 
+    background: #fff5f5; 
+    border-left: 4px solid #dc3545; 
+}
+tbody tr.row-match { 
+    background: #f0fff4; 
+    border-left: 4px solid #28a745; 
+}
+
+.export-btn, .copy-btn {
     background: #E6E6FA;
     color: #1d1d1f;
     border: none;
@@ -273,21 +310,22 @@ tbody tr:hover { background: #FAF8FF; }
     border-radius: 10px;
     cursor: pointer;
     font-size: 1em;
+    margin-right: 10px;
 }
+.export-btn:hover, .copy-btn:hover { background: #D8BFD8; }
 
-.export-btn:hover { background: #D8BFD8; }
+.copy-btn {
+    background: #28a745;
+    color: white;
+}
+.copy-btn:hover { background: #218838; }
 
 .hidden { display: none !important; }
 
-/* Адаптивность */
 @media (max-width: 1000px) {
-    .sverka-layout {
-        grid-template-columns: 1fr;
-    }
+    .sverka-layout { grid-template-columns: 1fr; }
     .panel { min-height: auto; }
-    .summary { grid-template-columns: repeat(3, 1fr); }
 }
-
 @media (max-width: 600px) {
     .summary { grid-template-columns: 1fr; }
     .reestr-actions { flex-direction: column; align-items: stretch; }
