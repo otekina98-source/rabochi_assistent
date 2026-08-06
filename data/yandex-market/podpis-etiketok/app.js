@@ -1,3 +1,4 @@
+console.log("Скрипт ЗАПУСТИЛСЯ!");
 const state = {
     orders: [],
     excludedIds: [],
