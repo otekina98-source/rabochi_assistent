@@ -3,6 +3,8 @@ const state = {
     excludedIds: [],
     manualExcluded: new Set(),
     priceMap: {},
+    priceBuiltIn: false,
+    priceOverridden: false,
     mapping: new Map(),
     tableData: [],
     pdfFile: null,
@@ -16,15 +18,19 @@ const state = {
 
 let previewFontFamily = 'Arial, sans-serif';
 
-// Уровни сжатия (scale = разрешение рендера, quality = качество JPEG)
-const COMPRESS_PRESETS = {
-    medium: { scale: 1.5, quality: 0.75 },
-    strong: { scale: 1.3, quality: 0.6 },
-    max:    { scale: 1.1, quality: 0.5 }
-};
+// Защита: не даём случайно закрыть/обновить страницу во время обработки
+let processingActive = false;
+window.addEventListener('beforeunload', (e) => {
+    if (processingActive) {
+        e.preventDefault();
+        e.returnValue = '';
+    }
+});
 
-// Масштаб рендера для OCR: 1.5 достаточно для крупных номеров — быстрее, чем 2
+// Масштаб рендера для OCR: 1.5 достаточно для крупных номеров
 const OCR_SCALE = 1.5;
+// Распознавание: только eng (быстрее), только цифры (белый список)
+const OCR_LANG = 'eng';
 
 // ===== Нормализация и поиск =====
 function normalizeHeader(str) {
@@ -58,45 +64,6 @@ function extractOrderId(text, knownIds) {
     return null;
 }
 
-// ===== Слой 0: чтение штрихкода (самый быстрый способ получить номер) =====
-function loadScript(src) {
-    return new Promise((resolve, reject) => {
-        const s = document.createElement('script');
-        s.src = src;
-        s.onload = resolve;
-        s.onerror = reject;
-        document.head.appendChild(s);
-    });
-}
-
-let zxingReader = null;
-let zxingTried = false;
-async function getZxingReader() {
-    if (zxingReader) return zxingReader;
-    if (zxingTried) return null;
-    zxingTried = true;
-    try {
-        await loadScript('https://unpkg.com/@zxing/library@0.21.0/umd/zxing.min.js');
-        await loadScript('https://unpkg.com/@zxing/browser@0.1.5/umd/zxing-browser.min.js');
-        const B = window.ZXingBrowser || window.ZXing;
-        if (B && B.BrowserMultiFormatReader) {
-            zxingReader = new B.BrowserMultiFormatReader();
-        }
-    } catch (e) { zxingReader = null; }
-    return zxingReader;
-}
-
-function barcodeToOrderId(rawText, knownIds) {
-    if (!rawText) return null;
-    const digits = String(rawText).replace(/\D+/g, '');
-    if (digits.length < 6) return null;
-    if (knownIds.includes(digits)) return digits;
-    for (const id of knownIds) {
-        if (id && digits.includes(id)) return id;
-    }
-    return null;
-}
-
 function normalizeAngle(a) {
     const r = ((Number(a) || 0) % 360 + 360) % 360;
     return [0, 90, 180, 270].includes(r) ? r : 0;
@@ -109,6 +76,16 @@ function mapPoint(rot, mw, mh, vx, vy) {
         case 270: return { px: vy, py: mh - vx };
         default:  return { px: vx, py: mh - vy };
     }
+}
+
+function loadScript(src) {
+    return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = src;
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+    });
 }
 
 // ===== Навигация и зоны загрузки =====
@@ -132,6 +109,36 @@ function setupDropZone(zoneId, inputId, handler) {
     });
     input.addEventListener('change', () => { if (input.files.length) handler(input.files[0]); });
 }
+
+// ===== Встроенный прайс =====
+function refreshPriceUI() {
+    const n = Object.keys(state.priceMap).length;
+    if (!n) return;
+    document.getElementById('priceCount').textContent = n;
+    document.getElementById('priceStats').classList.remove('d-none');
+    document.getElementById('btnMatch').disabled = false;
+
+    if (state.priceBuiltIn && !state.priceOverridden) {
+        let note = document.getElementById('priceNote');
+        if (!note) {
+            note = document.createElement('div');
+            note.id = 'priceNote';
+            note.className = 'alert alert-info small py-2 mb-2';
+            const dz = document.getElementById('priceDropZone');
+            dz.parentNode.insertBefore(note, dz);
+        }
+        note.innerHTML = `📦 Действует встроенный прайс: <strong>${n} товаров</strong>. Если нужен другой — загрузите файл ниже, он будет действовать до перезагрузки страницы.`;
+    }
+}
+
+(async function initBuiltInPrice() {
+    try { await loadScript('price-data.js'); } catch (e) { /* файла нет — работаем как раньше */ }
+    if (window.DEFAULT_PRICE_MAP) {
+        state.priceMap = Object.assign({}, window.DEFAULT_PRICE_MAP);
+        state.priceBuiltIn = true;
+        refreshPriceUI();
+    }
+})();
 
 // ===== STEP 1: заказы =====
 setupDropZone('ordersDropZone', 'ordersInput', async (file) => {
@@ -172,13 +179,14 @@ setupDropZone('ordersDropZone', 'ordersInput', async (file) => {
         document.getElementById('statRemaining').textContent = state.orders.length;
         document.getElementById('ordersStats').classList.remove('d-none');
         document.getElementById('ordersDropZone').classList.add('d-none');
+        refreshPriceUI();
     } catch (err) {
         alert('Ошибка обработки файла заказов: ' + err.message);
         location.reload();
     }
 });
 
-// ===== STEP 2: прайс =====
+// ===== STEP 2: прайс (загрузка поверх встроенного) =====
 setupDropZone('priceDropZone', 'priceInput', async (file) => {
     try {
         document.getElementById('priceDropZone').innerHTML = '<div class="spinner-border"></div>';
@@ -203,9 +211,10 @@ setupDropZone('priceDropZone', 'priceInput', async (file) => {
             if (sku) state.priceMap[sku] = name;
         }
 
-        document.getElementById('priceCount').textContent = Object.keys(state.priceMap).length;
-        document.getElementById('priceStats').classList.remove('d-none');
-        document.getElementById('btnMatch').disabled = false;
+        state.priceOverridden = true;
+        const note = document.getElementById('priceNote');
+        if (note) note.remove();
+        refreshPriceUI();
         document.getElementById('priceDropZone').classList.add('d-none');
     } catch (err) {
         alert('Ошибка обработки прайс-листа: ' + err.message);
@@ -300,9 +309,6 @@ async function initPdfPreview() {
     state.pageRotation = page.rotate || 0;
 
     const base = page.getViewport({ scale: 1 });
-    state.visualW = base.width;
-    state.visualH = base.height;
-
     let availW = container.clientWidth - 24;
     let availH = container.clientHeight - 24;
     if (availW <= 0) availW = 800;
@@ -343,7 +349,6 @@ async function initPdfPreview() {
     document.getElementById('btnStartProcess').disabled = false;
 
     ensureFineTuneControls();
-    ensureCompressControls();
     syncOverlayInputs();
     redrawTextPreview();
 }
@@ -373,33 +378,7 @@ function ensureFineTuneControls() {
     document.getElementById('cfgYShift').addEventListener('input', (e) => { state.textConfig.yShift = parseFloat(e.target.value); redrawTextPreview(); });
 }
 
-// Переключатели сжатия и скорости (создаются автоматически, index.html не трогаем)
-function ensureCompressControls() {
-    if (document.getElementById('compressRow')) return;
-    const btn = document.getElementById('btnStartProcess');
-    const wrap = document.createElement('div');
-    wrap.id = 'compressRow';
-    wrap.className = 'alert alert-info small py-2 mt-2';
-    wrap.innerHTML = `
-        <div class="form-check form-switch">
-            <input class="form-check-input" type="checkbox" id="cfgCompress" checked>
-            <label class="form-check-label" for="cfgCompress">Сжать файл для Интрэ</label>
-        </div>
-        <select class="form-select form-select-sm mt-1" id="cfgCompressLevel">
-            <option value="medium">Среднее сжатие (лучшее качество)</option>
-            <option value="strong" selected>Сильное сжатие (рекомендую)</option>
-            <option value="max">Максимальное сжатие (меньший размер)</option>
-        </select>
-        <select class="form-select form-select-sm mt-1" id="cfgOcrLang">
-            <option value="rus+eng" selected>Распознавание: полное (rus+eng)</option>
-            <option value="eng">Распознавание: быстрое (eng)</option>
-        </select>
-        <div class="text-muted" style="margin-top:4px;">Буквы игнорируются — ищутся только цифры номера. Сначала читается верхняя треть этикетки, целиком страница — только если номер не нашёлся.</div>
-    `;
-    btn.parentNode.insertBefore(wrap, btn);
-}
-
-// ===== Рисование текста на канвасе (общее для превью и сжатия) =====
+// ===== Рисование текста на канвасе (превью) =====
 function paintLabel(ctx, cw, ch, scale, text, cfg) {
     const vx0 = (Number(cfg.x) / 100) * cw;
     const vy0 = (Number(cfg.y) / 100) * ch;
@@ -589,7 +568,7 @@ async function getFontkit() {
             '• font-data.js (base64 шрифта): ' + (window.DEJAVU_FONT_B64 ? '✅ есть' : '❌ НЕТ') + '\n' +
             '• Шрифт: ' + (state.fontBytes ? '✅ загружен (' + state.fontSource + ')' : '❌ НЕ загружен') + '\n' +
             '• fontkit: ' + (window.fontkit ? '✅ есть (' + state.fontkitSource + ')' : '❌ НЕТ (fontkit.local.js отсутствует или не сработал)') + '\n\n' +
-            'Примечание: при включённом сжатии шрифт/fontkit не требуются.'
+            'Запустите «node make-font.js» в папке модуля или проверьте интернет.'
         );
     }
 })();
@@ -601,82 +580,46 @@ function isExcluded(orderId) {
     return state.excludedIds.some(e => e === orderId || (e && orderId.includes(e)));
 }
 
-// ===== STEP 5: обработка в браузере =====
+// ===== STEP 5: обработка в браузере (векторный режим, максимальная скорость) =====
 async function startProcessing() {
     if (!(state.textConfig.width > 0) || !(state.textConfig.height > 0)) {
         Object.assign(state.textConfig, { x: 3.6, y: 91.7, width: 90, height: 7.1 });
     }
     goToStep(5);
+    processingActive = true;
 
     try {
         const pdfBytes = new Uint8Array(await state.pdfFile.arrayBuffer());
 
-        const compress = document.getElementById('cfgCompress').checked;
-        const preset = COMPRESS_PRESETS[document.getElementById('cfgCompressLevel').value] || COMPRESS_PRESETS.strong;
-
-        document.getElementById('processStatus').textContent = 'Загрузка PDF...';
+        document.getElementById('processStatus').textContent = 'Загрузка PDF и шрифта...';
         const pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
 
-        // Шрифт и fontkit нужны только для векторного (несжатого) режима
-        let font = null;
-        if (!compress) {
-            const fontBytes = state.fontBytes || await loadFontBytes();
-            const fontkitLib = await getFontkit();
-            if (!fontBytes || !fontkitLib) {
-                alert('Не удалось загрузить шрифт/fontkit для векторного режима. Включите «Сжать файл» или запустите «node make-font.js».');
-                goToStep(4);
-                return;
-            }
-            pdfDoc.registerFontkit(fontkitLib);
-            font = await pdfDoc.embedFont(fontBytes);
+        const fontBytes = state.fontBytes || await loadFontBytes();
+        const fontkitLib = await getFontkit();
+        if (!fontBytes || !fontkitLib) {
+            alert('Не удалось загрузить шрифт/fontkit. Запустите «node make-font.js» в папке модуля или проверьте интернет.');
+            processingActive = false;
+            goToStep(4);
+            return;
         }
+        pdfDoc.registerFontkit(fontkitLib);
+        const font = await pdfDoc.embedFont(fontBytes);
 
         const pdfjs = await pdfjsLib.getDocument({ data: pdfBytes.slice() }).promise;
         const totalPages = pdfjs.numPages;
         const rotations = new Array(totalPages).fill(0);
         const results = new Array(totalPages).fill(null);
 
-        // Для режима сжатия: собираем PDF из JPEG по мере готовности
-        let outDocCompress = null;
-        let pageOut = null;
-        let assembleIdx = 0;
-        let skippedExcluded = 0;
-        if (compress) {
-            outDocCompress = await PDFLib.PDFDocument.create();
-            pageOut = new Array(totalPages).fill(undefined);
-        }
-
-        async function flushPages() {
-            while (assembleIdx < totalPages && pageOut[assembleIdx] !== undefined) {
-                const item = pageOut[assembleIdx];
-                if (item.skip) {
-                    skippedExcluded++;
-                } else {
-                    const img = await outDocCompress.embedJpg(item.jpeg);
-                    const p = outDocCompress.addPage([item.w, item.h]);
-                    p.drawImage(img, { x: 0, y: 0, width: item.w, height: item.h });
-                }
-                pageOut[assembleIdx] = null;
-                assembleIdx++;
-            }
-        }
-
         document.getElementById('processStatus').textContent = 'Загрузка языковых пакетов OCR...';
-        // Потоков OCR = сколько позволяет процессор (но не больше 6)
         const CPU = navigator.hardwareConcurrency || 4;
         const POOL = Math.max(2, Math.min(CPU - 2 > 0 ? CPU - 2 : 2, 8));
-        const ocrLang = document.getElementById('cfgOcrLang').value;
         const workers = [];
         for (let i = 0; i < POOL; i++) {
-            const w = await Tesseract.createWorker(ocrLang);
+            const w = await Tesseract.createWorker(OCR_LANG);
             // Игнорируем буквы: распознаём только цифры — быстрее и точнее для номеров
             try { await w.setParameters({ tessedit_char_whitelist: '0123456789' }); } catch (e) { /* необязательно */ }
             workers.push(w);
         }
-
-        // Быстрый слой: штрихкоды (если библиотека загрузилась)
-        const zxing = await getZxingReader();
-        let statBarcode = 0, statOcrCrop = 0, statOcrFull = 0;
 
         const knownIds = Array.from(state.mapping.keys())
             .concat(state.excludedIds)
@@ -688,80 +631,42 @@ async function startProcessing() {
         async function runWorker(worker) {
             const cv = document.createElement('canvas');
             const cropCv = document.createElement('canvas');
-            const outCv = compress ? document.createElement('canvas') : null;
             while (next < totalPages) {
                 const idx = next++;
                 const page = await pdfjs.getPage(idx + 1);
                 rotations[idx] = page.rotate || 0;
-                const vp1 = page.getViewport({ scale: 1 });
                 const viewport = page.getViewport({ scale: OCR_SCALE });
                 cv.width = viewport.width;
                 cv.height = viewport.height;
                 await page.render({ canvasContext: cv.getContext('2d'), viewport }).promise;
 
-                               // Верхняя треть этикетки — там штрихкод и номер заказа
+                // Распознаём верхнюю треть этикетки — номер заказа там
+                let text = '';
                 const cropH = Math.round(cv.height * 0.35);
                 cropCv.width = cv.width;
                 cropCv.height = cropH;
                 cropCv.getContext('2d').drawImage(cv, 0, 0, cv.width, cropH, 0, 0, cv.width, cropH);
+                const fast = await worker.recognize(cropCv);
+                text = fast.data.text || '';
+                let orderId = extractOrderId(text, knownIds);
 
-                let text = '';
-                let orderId = null;
-
-                // СЛОЙ 0 (мгновенный): штрихкод
-                if (zxing) {
-                    try {
-                        const res = await zxing.decodeFromCanvasElement(cropCv);
-                        orderId = barcodeToOrderId(res && res.getText ? res.getText() : null, knownIds);
-                        if (orderId) statBarcode++;
-                    } catch (e) { /* штрихкод не прочитался — идём в OCR */ }
-                }
-
-                // СЛОЙ 1: OCR верхней трети (только цифры)
-                if (!orderId) {
-                    const fast = await worker.recognize(cropCv);
-                    text = fast.data.text || '';
-                    orderId = extractOrderId(text, knownIds);
-                    if (orderId) statOcrCrop++;
-                }
-
-                // СЛОЙ 2: вся страница
+                // Не нашлось сверху — распознаём страницу целиком
                 if (!orderId) {
                     const full = await worker.recognize(cv);
                     text = full.data.text || '';
                     orderId = extractOrderId(text, knownIds);
-                    if (orderId) statOcrFull++;
                 }
 
                 const productName = orderId ? state.mapping.get(orderId) : null;
                 const excluded = !!orderId && isExcluded(orderId);
 
-                if (excluded) {
+                if (!excluded && productName) {
+                    drawLabel(pdfDoc, idx, font, rotations[idx], productName, cfg);
+                    results[idx] = { status: 'OK', orderId, productName };
+                } else if (excluded) {
                     results[idx] = { status: 'EXCLUDED', orderId };
-                    if (compress) { pageOut[idx] = { skip: true }; await flushPages(); }
-                } else if (compress) {
-                    const s = preset.scale;
-                    const ow = Math.max(2, Math.round(vp1.width * s));
-                    const oh = Math.max(2, Math.round(vp1.height * s));
-                    outCv.width = ow;
-                    outCv.height = oh;
-                    const octx = outCv.getContext('2d');
-                    octx.imageSmoothingEnabled = true;
-                    octx.imageSmoothingQuality = 'high';
-                    octx.drawImage(cv, 0, 0, cv.width, cv.height, 0, 0, ow, oh);
-                    if (productName) paintLabel(octx, ow, oh, s, productName, cfg);
-                    const blob = await new Promise(res => outCv.toBlob(res, 'image/jpeg', preset.quality));
-                    const bytes = new Uint8Array(await blob.arrayBuffer());
-                    pageOut[idx] = { jpeg: bytes, w: vp1.width, h: vp1.height };
-                    results[idx] = { status: productName ? 'OK' : 'NOT_FOUND', orderId, productName };
-                    await flushPages();
                 } else {
-                    if (productName) {
-                        drawLabel(pdfDoc, idx, font, rotations[idx], productName, cfg);
-                        results[idx] = { status: 'OK', orderId, productName };
-                    } else {
-                        results[idx] = { status: 'NOT_FOUND', orderId, ocrText: text.substring(0, 200) };
-                    }
+                    results[idx] = { status: 'NOT_FOUND', orderId, ocrText: text.substring(0, 200) };
                 }
 
                 done++;
@@ -780,22 +685,16 @@ async function startProcessing() {
 
         document.getElementById('processStatus').textContent = 'Сборка итогового PDF...';
 
-        let outBytes;
-        if (compress) {
-            await flushPages();
-            outBytes = await outDocCompress.save();
-        } else {
-            const outDoc = await PDFLib.PDFDocument.create();
-            for (let i = 0; i < totalPages; i++) {
-                const r = results[i];
-                if (r && r.orderId && isExcluded(r.orderId)) { skippedExcluded++; continue; }
-                const [copied] = await outDoc.copyPages(pdfDoc, [i]);
-                outDoc.addPage(copied);
-            }
-            outBytes = await outDoc.save();
+        const outDoc = await PDFLib.PDFDocument.create();
+        let skippedExcluded = 0;
+        for (let i = 0; i < totalPages; i++) {
+            const r = results[i];
+            if (r && r.orderId && isExcluded(r.orderId)) { skippedExcluded++; continue; }
+            const [copied] = await outDoc.copyPages(pdfDoc, [i]);
+            outDoc.addPage(copied);
         }
+        const outBytes = await outDoc.save();
 
-        const sizeMB = (outBytes.length / 1024 / 1024).toFixed(1);
         const pdfBlob = new Blob([outBytes], { type: 'application/pdf' });
         document.getElementById('downloadPdfBtn').href = URL.createObjectURL(pdfBlob);
         document.getElementById('downloadPdfBtn').download = 'processed_labels.pdf';
@@ -833,16 +732,12 @@ async function startProcessing() {
             statsEl.className = 'text-muted';
             resultView.insertBefore(statsEl, resultView.querySelector('.d-grid'));
         }
-        statsEl.innerHTML =
-            `✅ Обработано: <strong>${ok}</strong> | ❌ Не найдено: <strong>${notFound}</strong> | ` +
-            `🚫 Удалено: <strong>${skippedExcluded}</strong><br>` +
-            `Страниц в итоговом PDF: <strong>${totalPages - skippedExcluded}</strong> из ${totalPages}<br>` +
-            `📦 Размер файла: <strong>${sizeMB} МБ</strong><br>` +
-            `📊 Номер считан: штрихкод — ${statBarcode}, верхняя треть — ${statOcrCrop}, вся страница — ${statOcrFull}` +
-            (compress && Number(sizeMB) > 70 ? '<br>Размер больше 70 МБ — выберите уровень «Максимальное сжатие» и повторите.' : '');
+        statsEl.innerHTML = 'Файлы готовы к скачиванию. Подробности — в журнале.';
 
+        processingActive = false;
     } catch (err) {
         console.error(err);
+        processingActive = false;
         alert('Ошибка обработки: ' + err.message);
         goToStep(4);
     }
