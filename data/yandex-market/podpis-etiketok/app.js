@@ -18,10 +18,13 @@ let previewFontFamily = 'Arial, sans-serif';
 
 // Уровни сжатия (scale = разрешение рендера, quality = качество JPEG)
 const COMPRESS_PRESETS = {
-    medium: { scale: 2,   quality: 0.7 },
-    strong: { scale: 1.6, quality: 0.6 },
-    max:    { scale: 1.3, quality: 0.5 }
+    medium: { scale: 1.5, quality: 0.75 },
+    strong: { scale: 1.3, quality: 0.6 },
+    max:    { scale: 1.1, quality: 0.5 }
 };
+
+// Масштаб рендера для OCR: 1.5 достаточно для крупных номеров — быстрее, чем 2
+const OCR_SCALE = 1.5;
 
 // ===== Нормализация и поиск =====
 function normalizeHeader(str) {
@@ -52,6 +55,45 @@ function extractOrderId(text, knownIds) {
     if (longNums) return longNums.sort((a, b) => b.length - a.length)[0];
     const shortNums = text.match(/\d{6,9}/g);
     if (shortNums) return shortNums.sort((a, b) => b.length - a.length)[0];
+    return null;
+}
+
+// ===== Слой 0: чтение штрихкода (самый быстрый способ получить номер) =====
+function loadScript(src) {
+    return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = src;
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+    });
+}
+
+let zxingReader = null;
+let zxingTried = false;
+async function getZxingReader() {
+    if (zxingReader) return zxingReader;
+    if (zxingTried) return null;
+    zxingTried = true;
+    try {
+        await loadScript('https://unpkg.com/@zxing/library@0.21.0/umd/zxing.min.js');
+        await loadScript('https://unpkg.com/@zxing/browser@0.1.5/umd/zxing-browser.min.js');
+        const B = window.ZXingBrowser || window.ZXing;
+        if (B && B.BrowserMultiFormatReader) {
+            zxingReader = new B.BrowserMultiFormatReader();
+        }
+    } catch (e) { zxingReader = null; }
+    return zxingReader;
+}
+
+function barcodeToOrderId(rawText, knownIds) {
+    if (!rawText) return null;
+    const digits = String(rawText).replace(/\D+/g, '');
+    if (digits.length < 6) return null;
+    if (knownIds.includes(digits)) return digits;
+    for (const id of knownIds) {
+        if (id && digits.includes(id)) return id;
+    }
     return null;
 }
 
@@ -331,7 +373,7 @@ function ensureFineTuneControls() {
     document.getElementById('cfgYShift').addEventListener('input', (e) => { state.textConfig.yShift = parseFloat(e.target.value); redrawTextPreview(); });
 }
 
-// Переключатель сжатия (создаётся автоматически, index.html не трогаем)
+// Переключатели сжатия и скорости (создаются автоматически, index.html не трогаем)
 function ensureCompressControls() {
     if (document.getElementById('compressRow')) return;
     const btn = document.getElementById('btnStartProcess');
@@ -341,14 +383,18 @@ function ensureCompressControls() {
     wrap.innerHTML = `
         <div class="form-check form-switch">
             <input class="form-check-input" type="checkbox" id="cfgCompress" checked>
-            <label class="form-check-label" for="cfgCompress">Сжать файл</label>
+            <label class="form-check-label" for="cfgCompress">Сжать файл для Интрэ</label>
         </div>
         <select class="form-select form-select-sm mt-1" id="cfgCompressLevel">
             <option value="medium">Среднее сжатие (лучшее качество)</option>
             <option value="strong" selected>Сильное сжатие (рекомендую)</option>
             <option value="max">Максимальное сжатие (меньший размер)</option>
         </select>
-        <div class="text-muted" style="margin-top:4px;">Если выключить — файл соберётся в исходном (векторном) качестве.</div>
+        <select class="form-select form-select-sm mt-1" id="cfgOcrLang">
+            <option value="rus+eng" selected>Распознавание: полное (rus+eng)</option>
+            <option value="eng">Распознавание: быстрое (eng)</option>
+        </select>
+        <div class="text-muted" style="margin-top:4px;">Буквы игнорируются — ищутся только цифры номера. Сначала читается верхняя треть этикетки, целиком страница — только если номер не нашёлся.</div>
     `;
     btn.parentNode.insertBefore(wrap, btn);
 }
@@ -616,9 +662,21 @@ async function startProcessing() {
         }
 
         document.getElementById('processStatus').textContent = 'Загрузка языковых пакетов OCR...';
-        const POOL = 2;
+        // Потоков OCR = сколько позволяет процессор (но не больше 6)
+        const CPU = navigator.hardwareConcurrency || 4;
+        const POOL = Math.max(2, Math.min(CPU - 2 > 0 ? CPU - 2 : 2, 8));
+        const ocrLang = document.getElementById('cfgOcrLang').value;
         const workers = [];
-        for (let i = 0; i < POOL; i++) workers.push(await Tesseract.createWorker('rus+eng'));
+        for (let i = 0; i < POOL; i++) {
+            const w = await Tesseract.createWorker(ocrLang);
+            // Игнорируем буквы: распознаём только цифры — быстрее и точнее для номеров
+            try { await w.setParameters({ tessedit_char_whitelist: '0123456789' }); } catch (e) { /* необязательно */ }
+            workers.push(w);
+        }
+
+        // Быстрый слой: штрихкоды (если библиотека загрузилась)
+        const zxing = await getZxingReader();
+        let statBarcode = 0, statOcrCrop = 0, statOcrFull = 0;
 
         const knownIds = Array.from(state.mapping.keys())
             .concat(state.excludedIds)
@@ -629,20 +687,52 @@ async function startProcessing() {
 
         async function runWorker(worker) {
             const cv = document.createElement('canvas');
+            const cropCv = document.createElement('canvas');
             const outCv = compress ? document.createElement('canvas') : null;
             while (next < totalPages) {
                 const idx = next++;
                 const page = await pdfjs.getPage(idx + 1);
                 rotations[idx] = page.rotate || 0;
                 const vp1 = page.getViewport({ scale: 1 });
-                const viewport = page.getViewport({ scale: 2 });
+                const viewport = page.getViewport({ scale: OCR_SCALE });
                 cv.width = viewport.width;
                 cv.height = viewport.height;
                 await page.render({ canvasContext: cv.getContext('2d'), viewport }).promise;
 
-                const { data } = await worker.recognize(cv);
-                const text = data.text || '';
-                const orderId = extractOrderId(text, knownIds);
+                               // Верхняя треть этикетки — там штрихкод и номер заказа
+                const cropH = Math.round(cv.height * 0.35);
+                cropCv.width = cv.width;
+                cropCv.height = cropH;
+                cropCv.getContext('2d').drawImage(cv, 0, 0, cv.width, cropH, 0, 0, cv.width, cropH);
+
+                let text = '';
+                let orderId = null;
+
+                // СЛОЙ 0 (мгновенный): штрихкод
+                if (zxing) {
+                    try {
+                        const res = await zxing.decodeFromCanvasElement(cropCv);
+                        orderId = barcodeToOrderId(res && res.getText ? res.getText() : null, knownIds);
+                        if (orderId) statBarcode++;
+                    } catch (e) { /* штрихкод не прочитался — идём в OCR */ }
+                }
+
+                // СЛОЙ 1: OCR верхней трети (только цифры)
+                if (!orderId) {
+                    const fast = await worker.recognize(cropCv);
+                    text = fast.data.text || '';
+                    orderId = extractOrderId(text, knownIds);
+                    if (orderId) statOcrCrop++;
+                }
+
+                // СЛОЙ 2: вся страница
+                if (!orderId) {
+                    const full = await worker.recognize(cv);
+                    text = full.data.text || '';
+                    orderId = extractOrderId(text, knownIds);
+                    if (orderId) statOcrFull++;
+                }
+
                 const productName = orderId ? state.mapping.get(orderId) : null;
                 const excluded = !!orderId && isExcluded(orderId);
 
@@ -747,7 +837,8 @@ async function startProcessing() {
             `✅ Обработано: <strong>${ok}</strong> | ❌ Не найдено: <strong>${notFound}</strong> | ` +
             `🚫 Удалено: <strong>${skippedExcluded}</strong><br>` +
             `Страниц в итоговом PDF: <strong>${totalPages - skippedExcluded}</strong> из ${totalPages}<br>` +
-            `📦 Размер файла: <strong>${sizeMB} МБ</strong>` +
+            `📦 Размер файла: <strong>${sizeMB} МБ</strong><br>` +
+            `📊 Номер считан: штрихкод — ${statBarcode}, верхняя треть — ${statOcrCrop}, вся страница — ${statOcrFull}` +
             (compress && Number(sizeMB) > 70 ? '<br>Размер больше 70 МБ — выберите уровень «Максимальное сжатие» и повторите.' : '');
 
     } catch (err) {
