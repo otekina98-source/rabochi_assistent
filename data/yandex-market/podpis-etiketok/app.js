@@ -362,7 +362,7 @@ function ensureCompressControls() {
     wrap.innerHTML = `
         <div class="form-check form-switch">
             <input class="form-check-input" type="checkbox" id="cfgCompress" checked>
-            <label class="form-check-label" for="cfgCompress">Сжать файл (для Интрэ)</label>
+            <label class="form-check-label" for="cfgCompress">Сжать файл</label>
         </div>
         <select class="form-select form-select-sm mt-1" id="cfgCompressLevel">
             <option value="quality" selected>Без потери качества</option>
