@@ -69,14 +69,14 @@ function openInstruction(store, item) {
                     <h4> Инструкция</h4>
                     <p>Здесь хранятся все инструкции по работе с каждым магазином.</p>
                     
-                    <h4> ЯндексМаркет</h4>
-                    <p>Все сверки по ЯндексМаркет:</p>
-                    <ul>
-                        <li><a href="data/yandex-market/shk-reestr/index.html" class="sverka-link">Сверка ШК и реестр</a> — сравнивает штрихкоды из PDF с наклейками с реестром номеров из 1С</li>
-                        <li><a href="data/yandex-market/akt-reestr/index.html" class="sverka-link">Сверка АКТ и реестр</a> — сравнивает номера из акта (PDF) с реестром номеров из 1С</li>
-                        <li><a href="data/yandex-market/gruzomesta/index.html" class="sverka-link">Сверка по грузоместам</a> — сравнивает количество грузомест из Excel файла ЛК с реестром из 1С</li>
-                    </ul>
-                    
+                    <h4>🚚 ЯндексМаркет</h4>
+<p>Все сверки по ЯндексМаркет:</p>
+<ul>
+    <li><a href="data/yandex-market/shk-reestr/index.html" class="sverka-link">Сверка ШК и реестр</a> — сравнивает штрихкоды из PDF с наклейками с реестром номеров из 1С</li>
+    <li><a href="data/yandex-market/akt-reestr/index.html" class="sverka-link">Сверка АКТ и реестр</a> — сравнивает номера из акта (PDF) с реестром номеров из 1С</li>
+    <li><a href="data/yandex-market/gruzomesta/index.html" class="sverka-link">Сверка по грузоместам</a> — сравнивает количество грузомест из Excel файла ЛК с реестром из 1С</li>
+    <li><a href="data/yandex-market/podpis-etiketok/index.html" class="sverka-link">Подпись этикеток</a> — добавляет названия товаров на этикетки (наклейки) для печати из PDF файла</li>
+</ul>
                     <h4>🏪 ОЗОН</h4>
                     <p>Все сверки по ОЗОН:</p>
                     <ul>
