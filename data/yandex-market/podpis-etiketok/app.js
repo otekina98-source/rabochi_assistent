@@ -369,7 +369,7 @@ function ensureCompressControls() {
             <option value="balance">Баланс (размер / качество)</option>
             <option value="min">Минимальный размер</option>
         </select>
-        <div class="text-muted" style="margin-top:4px;">Выключить — файл соберётся в исходном векторном виде (большой размер).</div>
+        <div class="text-muted" style="margin-top:4px;">Выключить — файл соберётся в исходном виде (большой размер).</div>
     `;
     btn.parentNode.insertBefore(wrap, btn);
 }
@@ -576,6 +576,30 @@ function isExcluded(orderId) {
     return state.excludedIds.some(e => e === orderId || (e && orderId.includes(e)));
 }
 
+// ===== Сортировка этикеток по названию товара =====
+// Возвращает массив индексов страниц в порядке, в котором они должны попасть в итоговый PDF:
+// сначала — этикетки с названием, по алфавиту (русская локаль, регистр не учитывается),
+// затем — страницы без названия (в исходном порядке).
+// Исключённые страницы (грузоместа > 1 / вручную) в результат не попадают.
+function sortLabelsByProductName(results) {
+    const named = [];
+    const rest = [];
+    results.forEach((r, idx) => {
+        if (!r) { rest.push(idx); return; }
+        if (r.orderId && isExcluded(r.orderId)) return;
+        if (r.status === 'OK' && r.productName) {
+            named.push({ idx, name: String(r.productName) });
+        } else {
+            rest.push(idx);
+        }
+    });
+    named.sort((a, b) => {
+        const cmp = a.name.localeCompare(b.name, 'ru', { sensitivity: 'base' });
+        return cmp !== 0 ? cmp : a.idx - b.idx;
+    });
+    return named.map(x => x.idx).concat(rest);
+}
+
 // ===== STEP 5: обработка в браузере =====
 async function startProcessing() {
     if (!(state.textConfig.width > 0) || !(state.textConfig.height > 0)) {
@@ -613,29 +637,10 @@ async function startProcessing() {
         const rotations = new Array(totalPages).fill(0);
         const results = new Array(totalPages).fill(null);
 
-        // Для режима сжатия: собираем PDF из JPEG по мере готовности
-        let outDocCompress = null;
+        // Для режима сжатия: храним JPEG каждой страницы, соберём в конце в отсортированном порядке
         let pageOut = null;
-        let assembleIdx = 0;
-        let skippedExcluded = 0;
         if (compress) {
-            outDocCompress = await PDFLib.PDFDocument.create();
             pageOut = new Array(totalPages).fill(undefined);
-        }
-
-        async function flushPages() {
-            while (assembleIdx < totalPages && pageOut[assembleIdx] !== undefined) {
-                const item = pageOut[assembleIdx];
-                if (item.skip) {
-                    skippedExcluded++;
-                } else {
-                    const img = await outDocCompress.embedJpg(item.jpeg);
-                    const p = outDocCompress.addPage([item.w, item.h]);
-                    p.drawImage(img, { x: 0, y: 0, width: item.w, height: item.h });
-                }
-                pageOut[assembleIdx] = null;
-                assembleIdx++;
-            }
         }
 
         document.getElementById('processStatus').textContent = 'Загрузка языковых пакетов OCR...';
@@ -673,7 +678,6 @@ async function startProcessing() {
 
                 // Распознаём верхнюю треть этикетки — номер заказа там
                 let text = '';
-                const cropH = Math.round(cv.height * (0.35 * (renderScale / OCR_SCALE) ) / (renderScale / OCR_SCALE)); // верхняя треть относительно высоты
                 const cropPx = Math.round(cv.height * 0.35);
                 cropCv.width = cv.width;
                 cropCv.height = cropPx;
@@ -694,7 +698,7 @@ async function startProcessing() {
 
                 if (excluded) {
                     results[idx] = { status: 'EXCLUDED', orderId };
-                    if (compress) { pageOut[idx] = { skip: true }; await flushPages(); }
+                    if (compress) pageOut[idx] = { skip: true };
                 } else if (compress) {
                     const s = preset.scale;
                     const ow = Math.max(2, Math.round(vp1.width * s));
@@ -710,7 +714,6 @@ async function startProcessing() {
                     const bytes = new Uint8Array(await blob.arrayBuffer());
                     pageOut[idx] = { jpeg: bytes, w: vp1.width, h: vp1.height };
                     results[idx] = { status: productName ? 'OK' : 'NOT_FOUND', orderId, productName };
-                    await flushPages();
                 } else {
                     if (productName) {
                         drawLabel(pdfDoc, idx, font, rotations[idx], productName, cfg);
@@ -734,17 +737,31 @@ async function startProcessing() {
         await Promise.all(workers.map(w => runWorker(w)));
         workers.forEach(w => w.terminate());
 
-        document.getElementById('processStatus').textContent = 'Сборка итогового PDF...';
+        document.getElementById('processStatus').textContent = 'Сортировка по названию и сборка итогового PDF...';
+
+        // Порядок страниц: по алфавиту названия товара (исключённые не попадают)
+        const pageOrder = sortLabelsByProductName(results);
+
+        let skippedExcluded = 0;
+        results.forEach(r => {
+            if (r && r.orderId && isExcluded(r.orderId)) skippedExcluded++;
+        });
 
         let outBytes;
         if (compress) {
-            await flushPages();
-            outBytes = await outDocCompress.save();
+            const outDoc = await PDFLib.PDFDocument.create();
+            for (const i of pageOrder) {
+                const item = pageOut[i];
+                if (!item || item.skip) continue;
+                const img = await outDoc.embedJpg(item.jpeg);
+                const p = outDoc.addPage([item.w, item.h]);
+                p.drawImage(img, { x: 0, y: 0, width: item.w, height: item.h });
+                pageOut[i] = null;
+            }
+            outBytes = await outDoc.save();
         } else {
             const outDoc = await PDFLib.PDFDocument.create();
-            for (let i = 0; i < totalPages; i++) {
-                const r = results[i];
-                if (r && r.orderId && isExcluded(r.orderId)) { skippedExcluded++; continue; }
+            for (const i of pageOrder) {
                 const [copied] = await outDoc.copyPages(pdfDoc, [i]);
                 outDoc.addPage(copied);
             }
@@ -790,7 +807,7 @@ async function startProcessing() {
             resultView.insertBefore(statsEl, resultView.querySelector('.d-grid'));
         }
         statsEl.innerHTML =
-            `📦 Размер файла: <strong>${sizeMB} МБ</strong>` +
+            `📦 Размер файла: <strong>${sizeMB} МБ</strong> · Этикетки отсортированы по названию товара` +
             (compress && Number(sizeMB) > 70 ? '<br>Больше 70 МБ — выберите «Минимальный размер» и повторите.' : '');
 
         processingActive = false;
