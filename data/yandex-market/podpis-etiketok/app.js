@@ -17,7 +17,6 @@ const state = {
 };
 
 let previewFontFamily = 'Arial, sans-serif';
-let lastOutBytes = null;
 
 // Защита: не даём случайно закрыть/обновить страницу во время обработки
 let processingActive = false;
@@ -27,13 +26,6 @@ window.addEventListener('beforeunload', (e) => {
         e.returnValue = '';
     }
 });
-
-const COMPRESS_PRESETS = {
-    quality: { scale: 2,   quality: 0.9 },
-    balance: { scale: 1.6, quality: 0.75 },
-    min:     { scale: 1.3, quality: 0.6 }
-};
-const TARGET_BYTES = 70 * 1024 * 1024; // цель сжатия: до 70 МБ
 
 const OCR_SCALE = 1.5;
 const OCR_LANG = 'eng';
@@ -388,29 +380,7 @@ async function initPdfPreview() {
 
     document.getElementById('btnStartProcess').disabled = false;
 
-    ensureCompressControls();
     redrawTextPreview();
-}
-
-function ensureCompressControls() {
-    if (document.getElementById('compressRow')) return;
-    const btn = document.getElementById('btnStartProcess');
-    const wrap = document.createElement('div');
-    wrap.id = 'compressRow';
-    wrap.className = 'alert alert-info small py-2 mt-2';
-    wrap.innerHTML = `
-        <div class="form-check form-switch">
-            <input class="form-check-input" type="checkbox" id="cfgCompress" checked>
-            <label class="form-check-label" for="cfgCompress">Сжать файл</label>
-        </div>
-        <select class="form-select form-select-sm mt-1" id="cfgCompressLevel">
-            <option value="quality" selected>Без потери качества</option>
-            <option value="balance">Баланс (размер / качество)</option>
-            <option value="min">Минимальный размер</option>
-        </select>
-        <div class="text-muted" style="margin-top:4px;">Выключить — файл соберётся в исходном виде (большой размер).</div>
-    `;
-    btn.parentNode.insertBefore(wrap, btn);
 }
 
 function redrawTextPreview() {
@@ -577,17 +547,8 @@ async function startProcessing() {
     goToStep(5);
     processingActive = true;
 
-    // сбрасываем кнопку сжатия от прошлого запуска
-    const compBtn = document.getElementById('downloadCompressedBtn');
-    if (compBtn) compBtn.classList.add('d-none');
-    const compStatus = document.getElementById('compressStatus');
-    if (compStatus) compStatus.classList.add('d-none');
-
     try {
         const pdfBytes = new Uint8Array(await state.pdfFile.arrayBuffer());
-
-        const compress = document.getElementById('cfgCompress').checked;
-        const preset = COMPRESS_PRESETS[document.getElementById('cfgCompressLevel').value] || COMPRESS_PRESETS.quality;
 
         document.getElementById('processStatus').textContent = 'Загрузка PDF и шрифта...';
         const pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
@@ -622,7 +583,6 @@ async function startProcessing() {
         const knownIds = Array.from(state.mapping.keys())
             .concat(Array.from(state.manualExcluded || []));
         const cfg = state.textConfig;
-        const renderScale = compress ? Math.max(OCR_SCALE, preset.scale) : OCR_SCALE;
         let next = 0, done = 0;
         const startTime = Date.now();
 
@@ -633,7 +593,7 @@ async function startProcessing() {
                 const idx = next++;
                 const page = await pdfjs.getPage(idx + 1);
                 rotations[idx] = page.rotate || 0;
-                const viewport = page.getViewport({ scale: renderScale });
+                const viewport = page.getViewport({ scale: OCR_SCALE });
                 cv.width = viewport.width;
                 cv.height = viewport.height;
                 await page.render({ canvasContext: cv.getContext('2d'), viewport }).promise;
@@ -721,8 +681,6 @@ async function startProcessing() {
             objectsPerTick: 50
         });
 
-        lastOutBytes = outBytes;
-
         const sizeMB = (outBytes.length / 1024 / 1024).toFixed(1);
         const pdfBlob = new Blob([outBytes], { type: 'application/pdf' });
         document.getElementById('downloadPdfBtn').href = URL.createObjectURL(pdfBlob);
@@ -766,8 +724,7 @@ async function startProcessing() {
         }
         statsEl.innerHTML =
             `📦 Размер файла: <strong>${sizeMB} МБ</strong> · Этикетки отсортированы по названию товара` +
-            (skippedCargo > 0 ? `<br>🚫 Пропущено этикеток (грузомест > 1): <strong>${skippedCargo}</strong>` : '') +
-            (Number(sizeMB) > 70 ? '<br>Больше 70 МБ — нажмите «🗜️ Сжать файл», чтобы уменьшить объём.' : '');
+            (skippedCargo > 0 ? `<br>🚫 Пропущено этикеток (грузомест > 1): <strong>${skippedCargo}</strong>` : '');
 
         processingActive = false;
     } catch (err) {
@@ -776,126 +733,6 @@ async function startProcessing() {
         alert('Ошибка обработки: ' + err.message);
         goToStep(4);
     }
-}
-
-// ===== Сжатие готового файла (как iLovePDF): меньше объём, текст остаётся для поиска =====
-async function compressResult() {
-    if (!lastOutBytes) { alert('Сначала обработайте файл.'); return; }
-    const btn = document.getElementById('btnCompress');
-    const status = document.getElementById('compressStatus');
-    btn.disabled = true;
-    status.classList.remove('d-none');
-    status.textContent = '🗜️ Сжатие: подготовка...';
-    try {
-        const bytes = await compressPdfBytes(lastOutBytes, (d, t) => {
-            status.textContent = `🗜️ Сжатие: страница ${d} из ${t}...`;
-        });
-        const sizeMB = (bytes.length / 1024 / 1024).toFixed(1);
-        const blob = new Blob([bytes], { type: 'application/pdf' });
-        const a = document.getElementById('downloadCompressedBtn');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'processed_labels_compressed.pdf';
-        a.classList.remove('d-none');
-        status.textContent = `✅ Сжато: ${sizeMB} МБ. Текст остался доступен для поиска (Ctrl+F).`;
-    } catch (err) {
-        console.error(err);
-        status.textContent = '❌ Ошибка сжатия: ' + err.message;
-    }
-    btn.disabled = false;
-}
-
-async function compressPdfBytes(bytes, onProgress) {
-    const pdfjs = await pdfjsLib.getDocument({ data: bytes.slice() }).promise;
-    const totalPages = pdfjs.numPages;
-
-    const outDoc = await PDFLib.PDFDocument.create();
-    const fontBytes = state.fontBytes || await loadFontBytes();
-    const fontkitLib = await getFontkit();
-    if (!fontBytes || !fontkitLib) throw new Error('Не удалось загрузить шрифт для сжатия.');
-    outDoc.registerFontkit(fontkitLib);
-    const font = await outDoc.embedFont(fontBytes);
-
-    // Авто-качество: стартуем высоко, плавно снижаем, если прогноз больше 70 МБ
-    const live = { scale: 2, quality: 0.85 };
-    let encodedBytes = 0, encodedCount = 0;
-
-    const pageOut = new Array(totalPages).fill(undefined);
-    let assembleIdx = 0;
-    async function flush() {
-        while (assembleIdx < totalPages && pageOut[assembleIdx] !== undefined) {
-            const it = pageOut[assembleIdx];
-            pageOut[assembleIdx] = null;
-            assembleIdx++;
-            if (!it) continue;
-            const p = outDoc.addPage([it.w, it.h]);
-            const img = await outDoc.embedJpg(it.jpeg);
-            p.drawImage(img, { x: 0, y: 0, width: it.w, height: it.h });
-            // Невидимый текстовый слой — для Ctrl+F
-            for (const t of it.texts) {
-                try {
-                    p.drawText(t.str, { x: t.x, y: t.y, size: t.size, font: font, opacity: 0, rotate: PDFLib.degrees(t.angle) });
-                } catch (e) { /* пропускаем проблемные глифы */ }
-            }
-        }
-    }
-
-    const CPU = navigator.hardwareConcurrency || 4;
-    const POOL = Math.max(2, Math.min(CPU - 2 > 0 ? CPU - 2 : 2, 6));
-    let next = 0, done = 0;
-
-    async function worker() {
-        const cv = document.createElement('canvas');
-        while (next < totalPages) {
-            const idx = next++;
-            const page = await pdfjs.getPage(idx + 1);
-            const vp0 = page.getViewport({ scale: 1 });
-            const visW = vp0.width, visH = vp0.height;
-            const vp = page.getViewport({ scale: live.scale });
-            cv.width = vp.width;
-            cv.height = vp.height;
-            await page.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
-            const blob = await new Promise(res => cv.toBlob(res, 'image/jpeg', live.quality));
-            const jpeg = new Uint8Array(await blob.arrayBuffer());
-
-            encodedBytes += jpeg.length;
-            encodedCount++;
-            const projected = (encodedBytes / encodedCount) * totalPages;
-            if (projected > TARGET_BYTES) {
-                live.scale = Math.max(1.2, live.scale - 0.2);
-                live.quality = Math.max(0.5, live.quality - 0.05);
-            }
-
-            // Собираем текстовый слой (координаты переводим в визуальную систему)
-            const texts = [];
-            try {
-                const tc = await page.getTextContent();
-                const tr = vp.transform;
-                for (const item of tc.items) {
-                    const str = item.str;
-                    if (!str || !str.trim()) continue;
-                    const it = item.transform;
-                    const m0 = tr[0] * it[0] + tr[2] * it[1];
-                    const m1 = tr[1] * it[0] + tr[3] * it[1];
-                    const m2 = tr[0] * it[2] + tr[2] * it[3];
-                    const m3 = tr[1] * it[2] + tr[3] * it[3];
-                    const m4 = tr[0] * it[4] + tr[2] * it[5] + tr[4];
-                    const m5 = tr[1] * it[4] + tr[3] * it[5] + tr[5];
-                    const size = Math.min(Math.max(Math.hypot(m2, m3) || 8, 4), 14);
-                    const angle = Math.round(-Math.atan2(m1, m0) * 180 / Math.PI);
-                    texts.push({ str: str, x: m4, y: visH - m5, size: size, angle: angle });
-                }
-            } catch (e) { /* страница без текста */ }
-
-            pageOut[idx] = { jpeg: jpeg, w: visW, h: visH, texts: texts };
-            await flush();
-            done++;
-            if (onProgress) onProgress(done, totalPages);
-        }
-    }
-
-    await Promise.all(Array.from({ length: POOL }, () => worker()));
-    await flush();
-    return outDoc.save({ useObjectStreams: true });
 }
 
 // ===== Вставка текста — ТОЧНО как в рабочем коде (add_name_and_rename.py) =====
