@@ -542,6 +542,32 @@ function sortLabelsByProductName(results) {
     return named.map(x => x.idx).concat(rest);
 }
 
+// ===== Вставка текста — ТОЧНО как в рабочем коде (add_name_and_rename.py) =====
+function drawLabel(pdfDoc, pageIdx, font, rotation, productName, cfg) {
+    const page = pdfDoc.getPage(pageIdx);
+    const rot = normalizeAngle(rotation);
+    const mb = page.getMediaBox();
+    const mw = mb.width, mh = mb.height;
+    const { x, y } = pythonPlacement(rot, mw, mh);
+    page.drawText(productName, {
+        x: x,
+        y: y,
+        size: Number(cfg.fontSize) || 5,
+        font: font,
+        color: parseColorLib(cfg.color),
+        rotate: PDFLib.degrees(90)
+    });
+}
+
+function parseColorLib(hex) {
+    const h = String(hex || '#000000').replace('#', '');
+    return PDFLib.rgb(
+        parseInt(h.substring(0, 2), 16) / 255,
+        parseInt(h.substring(2, 4), 16) / 255,
+        parseInt(h.substring(4, 6), 16) / 255
+    );
+}
+
 // ===== STEP 5: обработка =====
 async function startProcessing() {
     goToStep(5);
@@ -566,9 +592,8 @@ async function startProcessing() {
 
         const pdfjs = await pdfjsLib.getDocument({ data: pdfBytes.slice() }).promise;
         const totalPages = pdfjs.numPages;
-        const rotations = new Array(totalPages).fill(0);
         const results = new Array(totalPages).fill(null);
-        const pageOut = new Array(totalPages).fill(undefined);
+        const pageOut = new Array(totalPages).fill(true);
 
         document.getElementById('processStatus').textContent = 'Загрузка языковых пакетов OCR...';
         const CPU = navigator.hardwareConcurrency || 4;
@@ -592,7 +617,6 @@ async function startProcessing() {
             while (next < totalPages) {
                 const idx = next++;
                 const page = await pdfjs.getPage(idx + 1);
-                rotations[idx] = page.rotate || 0;
                 const viewport = page.getViewport({ scale: OCR_SCALE });
                 cv.width = viewport.width;
                 cv.height = viewport.height;
@@ -619,6 +643,12 @@ async function startProcessing() {
 
                 const productName = orderId ? state.mapping.get(orderId) : null;
                 const excluded = !!orderId && isExcluded(orderId);
+                if (excluded) {
+                    results[idx] = { status: 'EXCLUDED', orderId, cargo: orderCargo };
+                    pageOut[idx] = false;
+                    done++;
+                    continue; // пропускаем дальнейшую обработку этой страницы
+                }
 
                 let orderCargo = 1;
                 if (orderId) {
@@ -629,18 +659,18 @@ async function startProcessing() {
 
                 if (excluded) {
                     results[idx] = { status: 'EXCLUDED', orderId, cargo: orderCargo };
-                    pageOut[idx] = { skip: true };
+                    pageOut[idx] = false;
                 } else if (excludeFromPdf) {
                     results[idx] = { status: 'OK', orderId, productName, cargo: orderCargo, skipPdf: true };
-                    pageOut[idx] = { skip: true };
+                    pageOut[idx] = false;
                 } else {
                     if (productName) {
-                        drawLabel(pdfDoc, idx, font, rotations[idx], productName, cfg);
+                        drawLabel(pdfDoc, idx, font, page.rotate || 0, productName, cfg);
                         results[idx] = { status: 'OK', orderId, productName, cargo: orderCargo };
                     } else {
                         results[idx] = { status: 'NOT_FOUND', orderId, ocrText: text.substring(0, 200), cargo: orderCargo };
                     }
-                    pageOut[idx] = { ok: true };
+                    pageOut[idx] = true;
                 }
 
                 done++;
@@ -683,7 +713,12 @@ async function startProcessing() {
 
         const sizeMB = (outBytes.length / 1024 / 1024).toFixed(1);
         const pdfBlob = new Blob([outBytes], { type: 'application/pdf' });
-        document.getElementById('downloadPdfBtn').href = URL.createObjectURL(pdfBlob);
+
+        // ===== ДОБАВЛЕНО: СЖАТИЕ PDF =====
+        const compressedBlob = await compressPDF(pdfBlob);
+        // =================================
+
+        document.getElementById('downloadPdfBtn').href = URL.createObjectURL(compressedBlob);
         document.getElementById('downloadPdfBtn').download = 'processed_labels.pdf';
 
         let ok = 0, notFound = 0;
@@ -735,28 +770,26 @@ async function startProcessing() {
     }
 }
 
-// ===== Вставка текста — ТОЧНО как в рабочем коде (add_name_and_rename.py) =====
-function drawLabel(pdfDoc, pageIdx, font, rotation, productName, cfg) {
-    const page = pdfDoc.getPage(pageIdx);
-    const rot = normalizeAngle(rotation);
-    const mb = page.getMediaBox();
-    const mw = mb.width, mh = mb.height;
-    const { x, y } = pythonPlacement(rot, mw, mh);
-    page.drawText(productName, {
-        x: x,
-        y: y,
-        size: Number(cfg.fontSize) || 5,
-        font: font,
-        color: parseColorLib(cfg.color),
-        rotate: PDFLib.degrees(90)
-    });
-}
+// ===== ФУНКЦИЯ СЖАТИЯ PDF (без потери качества) =====
+async function compressPDF(blob) {
+    // Если файл меньше 1 МБ — не сжимаем, чтобы не тратить время
+    if (blob.size < 1024 * 1024) return blob;
 
-function parseColorLib(hex) {
-    const h = String(hex || '#000000').replace('#', '');
-    return PDFLib.rgb(
-        parseInt(h.substring(0, 2), 16) / 255,
-        parseInt(h.substring(2, 4), 16) / 255,
-        parseInt(h.substring(4, 6), 16) / 255
-    );
+    try {
+        const arrayBuffer = await blob.arrayBuffer();
+        const pdfDoc = await PDFLib.PDFDocument.load(arrayBuffer);
+        
+        // Сохраняем с максимальным сжатием без потери качества
+        const compressedBytes = await pdfDoc.save({
+            compress: true,
+            useObjectStreams: true,
+            addDefaultPage: false,
+            updateMetadata: false,
+        });
+        
+        return new Blob([compressedBytes], { type: 'application/pdf' });
+    } catch (e) {
+        console.warn('Сжатие не удалось, возвращаем оригинал:', e);
+        return blob;
+    }
 }
