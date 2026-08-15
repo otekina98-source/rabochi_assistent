@@ -120,6 +120,7 @@ function goToStep(stepNum) {
     document.querySelectorAll('.step-container').forEach(el => el.classList.remove('active'));
     document.getElementById(`step${stepNum}`).classList.add('active');
     document.getElementById('globalProgress').style.width = `${(stepNum / 5) * 100}%`;
+    if (stepNum === 3 && state.orders.length) rebuildTable();
     if (stepNum === 4 && state.pdfFile) initPdfPreview();
 }
 
@@ -252,10 +253,9 @@ function parseManualExclusions() {
     const el = document.getElementById('manualExcludeInput');
     const set = new Set();
     if (!el) return set;
-    el.value.split(/\r?\n/).forEach(line => {
-        const id = normalizeSku(line.trim());
-        if (id) set.add(id);
-    });
+    // вытаскиваем все номера (8-15 цифр) независимо от разделителей: строки, запятые, пробелы, «№»
+    const nums = el.value.match(/\d{8,15}/g) || [];
+    nums.forEach(n => set.add(normalizeSku(n)));
     return set;
 }
 
@@ -268,10 +268,9 @@ function sortByName(a, b) {
     return 0;
 }
 
-function matchAndShowTable() {
+function rebuildTable() {
     state.manualExcluded = parseManualExclusions();
     const activeOrders = state.orders.filter(o => !state.manualExcluded.has(o.orderId));
-
     state.mapping = new Map();
     state.tableData = activeOrders.map(order => {
         const productName = state.priceMap[order.sku] || null;
@@ -280,12 +279,15 @@ function matchAndShowTable() {
     });
     state.tableData.sort(sortByName);
     renderTable(state.tableData);
+}
+
+function matchAndShowTable() {
+    rebuildTable();
     if (state.manualExcluded.size) {
         document.getElementById('tableInfo').textContent += ` · Вручную исключено: ${state.manualExcluded.size}`;
     }
     goToStep(3);
 }
-
 function renderTable(data) {
     document.querySelector('#resultTable tbody').innerHTML = data.map(row => `
         <tr class="${row.status === 'NOT_FOUND' ? 'table-danger' : ''}">
@@ -572,6 +574,8 @@ function parseColorLib(hex) {
 async function startProcessing() {
     goToStep(5);
     processingActive = true;
+    // Перечитываем список ручных исключений прямо перед обработкой
+    state.manualExcluded = parseManualExclusions();
 
     try {
         const pdfBytes = new Uint8Array(await state.pdfFile.arrayBuffer());
