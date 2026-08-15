@@ -737,9 +737,7 @@ async function startProcessing() {
         statsEl.innerHTML =
             `📦 Размер файла: <strong>${sizeMB} МБ</strong> · В PDF этикеток: <strong>${ok}</strong> · Отсортированы по названию` +
             (skippedCargo > 0 ? `<br>⏭️ Пропущено (грузомест > 1): <strong>${skippedCargo}</strong>` : '') +
-            (removedNotInTable > 0 ? `<br>🚫 Удалено (номера нет в таблице): <strong>${removedNotInTable}</strong> — страницы ${removedPages.join(', ')} (подробности в журнале, лист «Не найдены»)` : '') +
-            (Number(sizeMB) > 70 ? '<br>Больше 70 МБ — нажмите «🗜️ Сжать файл», чтобы уменьшить объём.' : '');
-
+            (removedNotInTable > 0 ? `<br>🚫 Удалено (номера нет в таблице): <strong>${removedNotInTable}</strong> — страницы ${removedPages.join(', ')}             
         processingActive = false;
     } catch (err) {
         console.error(err);
