@@ -643,12 +643,6 @@ async function startProcessing() {
 
                 const productName = orderId ? state.mapping.get(orderId) : null;
                 const excluded = !!orderId && isExcluded(orderId);
-                if (excluded) {
-                    results[idx] = { status: 'EXCLUDED', orderId, cargo: orderCargo };
-                    pageOut[idx] = false;
-                    done++;
-                    continue; // пропускаем дальнейшую обработку этой страницы
-                }
 
                 let orderCargo = 1;
                 if (orderId) {
@@ -657,10 +651,16 @@ async function startProcessing() {
                 }
                 const excludeFromPdf = orderCargo > 1;
 
+                // ===== ИСПРАВЛЕНИЕ: если исключено вручную, сразу удаляем и пропускаем =====
                 if (excluded) {
                     results[idx] = { status: 'EXCLUDED', orderId, cargo: orderCargo };
                     pageOut[idx] = false;
-                } else if (excludeFromPdf) {
+                    done++;
+                    continue;
+                }
+                // =================================================================================
+
+                if (excludeFromPdf) {
                     results[idx] = { status: 'OK', orderId, productName, cargo: orderCargo, skipPdf: true };
                     pageOut[idx] = false;
                 } else {
@@ -713,12 +713,7 @@ async function startProcessing() {
 
         const sizeMB = (outBytes.length / 1024 / 1024).toFixed(1);
         const pdfBlob = new Blob([outBytes], { type: 'application/pdf' });
-
-        // ===== ДОБАВЛЕНО: СЖАТИЕ PDF =====
-        const compressedBlob = await compressPDF(pdfBlob);
-        // =================================
-
-        document.getElementById('downloadPdfBtn').href = URL.createObjectURL(compressedBlob);
+        document.getElementById('downloadPdfBtn').href = URL.createObjectURL(pdfBlob);
         document.getElementById('downloadPdfBtn').download = 'processed_labels.pdf';
 
         let ok = 0, notFound = 0;
@@ -767,29 +762,5 @@ async function startProcessing() {
         processingActive = false;
         alert('Ошибка обработки: ' + err.message);
         goToStep(4);
-    }
-}
-
-// ===== ФУНКЦИЯ СЖАТИЯ PDF (без потери качества) =====
-async function compressPDF(blob) {
-    // Если файл меньше 1 МБ — не сжимаем, чтобы не тратить время
-    if (blob.size < 1024 * 1024) return blob;
-
-    try {
-        const arrayBuffer = await blob.arrayBuffer();
-        const pdfDoc = await PDFLib.PDFDocument.load(arrayBuffer);
-        
-        // Сохраняем с максимальным сжатием без потери качества
-        const compressedBytes = await pdfDoc.save({
-            compress: true,
-            useObjectStreams: true,
-            addDefaultPage: false,
-            updateMetadata: false,
-        });
-        
-        return new Blob([compressedBytes], { type: 'application/pdf' });
-    } catch (e) {
-        console.warn('Сжатие не удалось, возвращаем оригинал:', e);
-        return blob;
     }
 }
