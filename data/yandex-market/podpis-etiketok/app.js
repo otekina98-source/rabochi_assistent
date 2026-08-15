@@ -542,33 +542,7 @@ function sortLabelsByProductName(results) {
     return named.map(x => x.idx).concat(rest);
 }
 
-// ===== Вставка текста — ТОЧНО как в рабочем коде (add_name_and_rename.py) =====
-function drawLabel(pdfDoc, pageIdx, font, rotation, productName, cfg) {
-    const page = pdfDoc.getPage(pageIdx);
-    const rot = normalizeAngle(rotation);
-    const mb = page.getMediaBox();
-    const mw = mb.width, mh = mb.height;
-    const { x, y } = pythonPlacement(rot, mw, mh);
-    page.drawText(productName, {
-        x: x,
-        y: y,
-        size: Number(cfg.fontSize) || 5,
-        font: font,
-        color: parseColorLib(cfg.color),
-        rotate: PDFLib.degrees(90) // ВОЗВРАЩАЕМ 90 ГРАДУСОВ, КАК БЫЛО В ОРИГИНАЛЕ
-    });
-}
-
-function parseColorLib(hex) {
-    const h = String(hex || '#000000').replace('#', '');
-    return PDFLib.rgb(
-        parseInt(h.substring(0, 2), 16) / 255,
-        parseInt(h.substring(2, 4), 16) / 255,
-        parseInt(h.substring(4, 6), 16) / 255
-    );
-}
-
-// ===== STEP 5: обработка (ТОЛЬКО ОПТИМИЗАЦИЯ ВЕСА) =====
+// ===== STEP 5: обработка =====
 async function startProcessing() {
     goToStep(5);
     processingActive = true;
@@ -592,8 +566,9 @@ async function startProcessing() {
 
         const pdfjs = await pdfjsLib.getDocument({ data: pdfBytes.slice() }).promise;
         const totalPages = pdfjs.numPages;
+        const rotations = new Array(totalPages).fill(0);
         const results = new Array(totalPages).fill(null);
-        const pageOut = new Array(totalPages).fill(true); // по умолчанию страница остается
+        const pageOut = new Array(totalPages).fill(undefined);
 
         document.getElementById('processStatus').textContent = 'Загрузка языковых пакетов OCR...';
         const CPU = navigator.hardwareConcurrency || 4;
@@ -617,6 +592,7 @@ async function startProcessing() {
             while (next < totalPages) {
                 const idx = next++;
                 const page = await pdfjs.getPage(idx + 1);
+                rotations[idx] = page.rotate || 0;
                 const viewport = page.getViewport({ scale: OCR_SCALE });
                 cv.width = viewport.width;
                 cv.height = viewport.height;
@@ -653,18 +629,18 @@ async function startProcessing() {
 
                 if (excluded) {
                     results[idx] = { status: 'EXCLUDED', orderId, cargo: orderCargo };
-                    pageOut[idx] = false; // удаляем страницу
+                    pageOut[idx] = { skip: true };
                 } else if (excludeFromPdf) {
                     results[idx] = { status: 'OK', orderId, productName, cargo: orderCargo, skipPdf: true };
-                    pageOut[idx] = false; // удаляем страницу
+                    pageOut[idx] = { skip: true };
                 } else {
                     if (productName) {
-                        drawLabel(pdfDoc, idx, font, page.rotate || 0, productName, cfg);
+                        drawLabel(pdfDoc, idx, font, rotations[idx], productName, cfg);
                         results[idx] = { status: 'OK', orderId, productName, cargo: orderCargo };
                     } else {
                         results[idx] = { status: 'NOT_FOUND', orderId, ocrText: text.substring(0, 200), cargo: orderCargo };
                     }
-                    pageOut[idx] = true; // оставляем страницу
+                    pageOut[idx] = { ok: true };
                 }
 
                 done++;
@@ -681,46 +657,28 @@ async function startProcessing() {
         await Promise.all(workers.map(w => runWorker(w)));
         workers.forEach(w => w.terminate());
 
-        document.getElementById('processStatus').textContent = 'Сортировка по названию и удаление лишних страниц...';
+        document.getElementById('processStatus').textContent = 'Сортировка по названию и сборка итогового PDF...';
 
-        // Получаем порядок страниц по алфавиту
         const pageOrder = sortLabelsByProductName(results);
 
-        // Удаляем страницы, которые помечены как pageOut = false
-        const toRemove = [];
-        for (let i = 0; i < totalPages; i++) {
-            if (!pageOut[i]) toRemove.push(i);
-        }
-        // Удаляем с конца, чтобы не сбивать индексы
-        toRemove.sort((a,b) => b - a);
-        for (const idx of toRemove) {
-            pdfDoc.removePage(idx);
-        }
+        let skippedExcluded = 0;
+        let skippedCargo = 0;
+        results.forEach(r => {
+            if (r && r.orderId && isExcluded(r.orderId)) skippedExcluded++;
+            if (r && r.skipPdf) skippedCargo++;
+        });
 
-        // Переупорядочиваем страницы по алфавиту (лёгкое копирование)
         const outDoc = await PDFLib.PDFDocument.create();
-        const finalOrder = [];
-        for (const idx of pageOrder) {
-            if (pageOut[idx]) finalOrder.push(idx);
-        }
-        // Если finalOrder пуст — значит все страницы удалены, возвращаем пустой PDF
-        if (finalOrder.length === 0) {
-            alert('Все этикетки были исключены. Готовый PDF пуст.');
-            processingActive = false;
-            goToStep(4);
-            return;
-        }
-
-        for (const idx of finalOrder) {
-            const [copied] = await outDoc.copyPages(pdfDoc, [idx]);
+        for (const i of pageOrder) {
+            const item = pageOut[i];
+            if (!item || item.skip) continue;
+            const [copied] = await outDoc.copyPages(pdfDoc, [i]);
             outDoc.addPage(copied);
         }
-
-        // Сохраняем с минимальным сжатием (ОПТИМИЗАЦИЯ ВЕСА)
         const outBytes = await outDoc.save({
-            useObjectStreams: false, // ОТКЛЮЧАЕМ ОБЪЕКТНЫЕ ПОТОКИ ДЛЯ ЛЁГКОСТИ
+            useObjectStreams: true,
             addDefaultPage: false,
-            objectsPerTick: 100,
+            objectsPerTick: 50
         });
 
         const sizeMB = (outBytes.length / 1024 / 1024).toFixed(1);
@@ -729,12 +687,10 @@ async function startProcessing() {
         document.getElementById('downloadPdfBtn').download = 'processed_labels.pdf';
 
         let ok = 0, notFound = 0;
-        let skippedCargo = 0;
         results.forEach(r => {
             if (!r) notFound++;
             else if (r.status === 'OK') {
                 if (!r.skipPdf) ok++;
-                else skippedCargo++;
             }
             else if (r.status === 'NOT_FOUND') notFound++;
         });
@@ -777,4 +733,30 @@ async function startProcessing() {
         alert('Ошибка обработки: ' + err.message);
         goToStep(4);
     }
+}
+
+// ===== Вставка текста — ТОЧНО как в рабочем коде (add_name_and_rename.py) =====
+function drawLabel(pdfDoc, pageIdx, font, rotation, productName, cfg) {
+    const page = pdfDoc.getPage(pageIdx);
+    const rot = normalizeAngle(rotation);
+    const mb = page.getMediaBox();
+    const mw = mb.width, mh = mb.height;
+    const { x, y } = pythonPlacement(rot, mw, mh);
+    page.drawText(productName, {
+        x: x,
+        y: y,
+        size: Number(cfg.fontSize) || 5,
+        font: font,
+        color: parseColorLib(cfg.color),
+        rotate: PDFLib.degrees(90)
+    });
+}
+
+function parseColorLib(hex) {
+    const h = String(hex || '#000000').replace('#', '');
+    return PDFLib.rgb(
+        parseInt(h.substring(0, 2), 16) / 255,
+        parseInt(h.substring(2, 4), 16) / 255,
+        parseInt(h.substring(4, 6), 16) / 255
+    );
 }
