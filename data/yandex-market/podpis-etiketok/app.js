@@ -37,7 +37,7 @@ const TARGET_BYTES = 70 * 1024 * 1024;
 const OCR_SCALE = 1.5;
 const OCR_LANG = 'eng';
 
-// ===== Нормализация и поиск =====
+// ===== Утилиты =====
 function normalizeHeader(str) {
     if (str === null || str === undefined) return '';
     return String(str)
@@ -54,33 +54,6 @@ function normalizeSku(value) {
     return s.replace(/[\s\u00A0\u2007\u202F\u2009\u200A\u205F\u3000]/g, '').toLowerCase();
 }
 
-function extractOrderId(text, knownIds) {
-    if (!text) return null;
-    const compact = text.replace(/\s+/g, '');
-    for (const id of knownIds) {
-        if (id && id.length >= 5 && compact.includes(id)) return id;
-    }
-    const m1 = text.match(/(?:заказ|order)\s*[:\-№#]?\s*(\d{8,15})/i);
-    if (m1) return m1[1];
-    const longNums = text.match(/\d{10,15}/g);
-    if (longNums) return longNums.sort((a, b) => b.length - a.length)[0];
-    const shortNums = text.match(/\d{6,9}/g);
-    if (shortNums) return shortNums.sort((a, b) => b.length - a.length)[0];
-    return null;
-}
-
-function fallbackOrderId(text, knownIds) {
-    if (!text || !knownIds || knownIds.length === 0) return null;
-    const numbers = text.match(/\d{8,15}/g) || [];
-    const knownIdsSet = new Set(knownIds.map(id => String(id)));
-    for (const num of numbers) {
-        if (knownIdsSet.has(num)) return num;
-        const match = knownIds.find(id => num.includes(id) || id.includes(num));
-        if (match) return match;
-    }
-    return null;
-}
-
 function normalizeAngle(a) {
     const r = ((Number(a) || 0) % 360 + 360) % 360;
     return [0, 90, 180, 270].includes(r) ? r : 0;
@@ -94,6 +67,16 @@ function loadScript(src) {
         s.onerror = reject;
         document.head.appendChild(s);
     });
+}
+
+// ===== Поиск ТОЛЬКО номеров из таблицы (даже внутри слипшихся чисел) =====
+function findTableOrderId(text, tableIds) {
+    if (!text || !tableIds.length) return null;
+    const compact = text.replace(/\s+/g, '');
+    for (const id of tableIds) {
+        if (id && id.length >= 5 && compact.includes(id)) return id;
+    }
+    return null;
 }
 
 // ===== Позиционирование текста — ТОЧНО как в рабочем коде (add_name_and_rename.py) =====
@@ -149,7 +132,6 @@ function setupDropZone(zoneId, inputId, handler) {
     });
 }
 
-// Запоминаем исходный вид зон, чтобы работала кнопка «🔄 Загрузить другой файл»
 const ordersZoneHTML = document.getElementById('ordersDropZone').innerHTML;
 const priceZoneHTML = document.getElementById('priceDropZone').innerHTML;
 const pdfZoneHTML = document.getElementById('pdfDropZone').innerHTML;
@@ -255,8 +237,7 @@ setupDropZone('priceDropZone', 'priceInput', async (file) => {
     }
 });
 
-// ===== STEP 3: сопоставление + ручные исключения =====
-// ВЫТАСКИВАЕМ ВСЕ НОМЕРА (8-15 цифр) НЕЗАВИСИМО ОТ ФОРМАТА ВСТАВКИ
+// ===== STEP 3: сопоставление (ручные исключения применяются ЗДЕСЬ, один раз) =====
 function parseManualExclusions() {
     const el = document.getElementById('manualExcludeInput');
     const set = new Set();
@@ -275,7 +256,6 @@ function sortByName(a, b) {
     return 0;
 }
 
-// Пересобирает таблицу с учётом ручных исключений (вызывается и при сопоставлении, и при входе на шаг 3)
 function rebuildTable() {
     state.manualExcluded = parseManualExclusions();
     const activeOrders = state.orders.filter(o => !state.manualExcluded.has(o.orderId));
@@ -547,26 +527,14 @@ async function getFontkit() {
     }
 })();
 
-// ===== Исключения =====
-function isExcluded(orderId) {
-    if (!orderId) return false;
-    if (state.manualExcluded && state.manualExcluded.has(orderId)) return true;
-    return state.excludedIds.some(e => e === orderId || (e && orderId.includes(e)));
-}
-
-// ===== Сортировка этикеток по названию товара =====
-function sortLabelsByProductName(results) {
+// ===== Сортировка этикеток по названию товара (только включённые в PDF) =====
+function sortPagesByProductName(results) {
     const named = [];
     const rest = [];
     results.forEach((r, idx) => {
-        if (!r) { rest.push(idx); return; }
-        if (r.orderId && isExcluded(r.orderId)) return;
-        if (r.cargo && r.cargo > 1) return;
-        if (r.status === 'OK' && r.productName) {
-            named.push({ idx, name: String(r.productName) });
-        } else {
-            rest.push(idx);
-        }
+        if (!r || r.status !== 'OK') return;
+        if (r.productName) named.push({ idx, name: String(r.productName) });
+        else rest.push(idx);
     });
     named.sort((a, b) => {
         const cmp = a.name.localeCompare(b.name, 'ru', { sensitivity: 'base' });
@@ -575,15 +543,11 @@ function sortLabelsByProductName(results) {
     return named.map(x => x.idx).concat(rest);
 }
 
-// ===== STEP 5: обработка =====
+// ===== STEP 5: обработка (ориентир — таблица после сопоставления) =====
 async function startProcessing() {
     goToStep(5);
     processingActive = true;
 
-    // ПЕРЕЧИТЫВАЕМ РУЧНЫЕ ИСКЛЮЧЕНИЯ ПРЯМО ПЕРЕД ОБРАБОТКОЙ — чтобы работало всегда
-    state.manualExcluded = parseManualExclusions();
-
-    // сбрасываем кнопку сжатия от прошлого запуска
     const compBtn = document.getElementById('downloadCompressedBtn');
     if (compBtn) compBtn.classList.add('d-none');
     const compStatus = document.getElementById('compressStatus');
@@ -624,8 +588,8 @@ async function startProcessing() {
             workers.push(w);
         }
 
-        const knownIds = Array.from(state.mapping.keys())
-            .concat(Array.from(state.manualExcluded || []));
+        // ЕДИНСТВЕННЫЙ ОРИЕНТИР — номера из таблицы после сопоставления
+        const tableIds = state.tableData.map(o => o.orderId).filter(Boolean);
         const cfg = state.textConfig;
         const renderScale = compress ? Math.max(OCR_SCALE, preset.scale) : OCR_SCALE;
         let next = 0, done = 0;
@@ -651,41 +615,34 @@ async function startProcessing() {
                 cropCv.getContext('2d').drawImage(cv, 0, 0, cv.width, cropPx, 0, 0, cv.width, cropPx);
                 const fast = await worker.recognize(cropCv);
                 text = fast.data.text || '';
-                let orderId = extractOrderId(text, knownIds);
+                let orderId = findTableOrderId(text, tableIds);
 
                 if (!orderId) {
                     const full = await worker.recognize(cv);
                     text = full.data.text || '';
-                    orderId = extractOrderId(text, knownIds);
-                }
-                if (!orderId && text) {
-                    orderId = fallbackOrderId(text, knownIds);
+                    orderId = findTableOrderId(text, tableIds);
                 }
 
-                const productName = orderId ? state.mapping.get(orderId) : null;
-                const excluded = !!orderId && isExcluded(orderId);
-
-                let orderCargo = 1;
-                if (orderId) {
-                    const foundOrder = state.orders.find(o => o.orderId === orderId);
-                    if (foundOrder && foundOrder.cargo !== undefined) orderCargo = foundOrder.cargo;
-                }
-                const excludeFromPdf = orderCargo > 1;
-
-                if (excluded) {
-                    results[idx] = { status: 'EXCLUDED', orderId, cargo: orderCargo };
-                    pageOut[idx] = { skip: true };
-                } else if (excludeFromPdf) {
-                    results[idx] = { status: 'OK', orderId, productName, cargo: orderCargo, skipPdf: true };
+                if (!orderId) {
+                    // Номера из таблицы на наклейке нет → удаляем автоматом
+                    results[idx] = { status: 'NOT_IN_TABLE', ocrText: text.substring(0, 200) };
                     pageOut[idx] = { skip: true };
                 } else {
-                    if (productName) {
-                        drawLabel(pdfDoc, idx, font, rotations[idx], productName, cfg);
-                        results[idx] = { status: 'OK', orderId, productName, cargo: orderCargo };
+                    const productName = state.mapping.get(orderId) || null;
+                    let orderCargo = 1;
+                    const foundOrder = state.orders.find(o => o.orderId === orderId);
+                    if (foundOrder && foundOrder.cargo !== undefined) orderCargo = foundOrder.cargo;
+
+                    if (orderCargo > 1) {
+                        results[idx] = { status: 'CARGO', orderId, productName, cargo: orderCargo };
+                        pageOut[idx] = { skip: true };
                     } else {
-                        results[idx] = { status: 'NOT_FOUND', orderId, ocrText: text.substring(0, 200), cargo: orderCargo };
+                        if (productName) {
+                            drawLabel(pdfDoc, idx, font, rotations[idx], productName, cfg);
+                        }
+                        results[idx] = { status: 'OK', orderId, productName, cargo: orderCargo };
+                        pageOut[idx] = { ok: true };
                     }
-                    pageOut[idx] = { ok: true };
                 }
 
                 done++;
@@ -704,19 +661,20 @@ async function startProcessing() {
 
         document.getElementById('processStatus').textContent = 'Сортировка по названию и сборка итогового PDF...';
 
-        const pageOrder = sortLabelsByProductName(results);
+        const pageOrder = sortPagesByProductName(results);
 
-        let skippedExcluded = 0;
         let skippedCargo = 0;
+        let removedNotInTable = 0;
         results.forEach(r => {
-            if (r && r.orderId && isExcluded(r.orderId)) skippedExcluded++;
-            if (r && r.skipPdf) skippedCargo++;
+            if (!r) return;
+            if (r.status === 'CARGO') skippedCargo++;
+            if (r.status === 'NOT_IN_TABLE') removedNotInTable++;
         });
 
         const outDoc = await PDFLib.PDFDocument.create();
         for (const i of pageOrder) {
             const item = pageOut[i];
-            if (!item || item.skip) continue;
+            if (!item || !item.ok) continue;
             const [copied] = await outDoc.copyPages(pdfDoc, [i]);
             outDoc.addPage(copied);
         }
@@ -733,27 +691,33 @@ async function startProcessing() {
         document.getElementById('downloadPdfBtn').href = URL.createObjectURL(pdfBlob);
         document.getElementById('downloadPdfBtn').download = 'processed_labels.pdf';
 
-        let ok = 0, notFound = 0;
-        results.forEach(r => {
-            if (!r) notFound++;
-            else if (r.status === 'OK') {
-                if (!r.skipPdf) ok++;
-            }
-            else if (r.status === 'NOT_FOUND') notFound++;
-        });
+        let ok = 0;
+        results.forEach(r => { if (r && r.status === 'OK') ok++; });
 
+        // Журнал
         const wb = XLSX.utils.book_new();
         const wsData = [['Страница', 'Статус', 'Заказ', 'Товар', 'Грузоместа', 'Распознанный текст']];
         results.forEach((r, idx) => {
             if (!r) { wsData.push([idx + 1, '⚠️ Не обработано', '-', '-', '-', '-']); return; }
             let status;
-            if (r.status === 'EXCLUDED') status = '🚫 Удалена (вручную)';
-            else if (r.skipPdf) status = '⏭️ Пропущена (Грузоместа > 1)';
-            else if (r.status === 'OK') status = '✅ Обработано';
-            else status = '❌ Не найден';
+            if (r.status === 'CARGO') status = '⏭️ Пропущена (Грузоместа > 1)';
+            else if (r.status === 'NOT_IN_TABLE') status = '🚫 Удалена (номера нет в таблице)';
+            else status = r.productName ? '✅ Обработано' : '✅ Обработано (без названия)';
             wsData.push([idx + 1, status, r.orderId || '-', r.productName || '-', r.cargo || 1, r.ocrText || '-']);
         });
         XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(wsData), 'Журнал');
+
+        // Отдельный лист: удалённые страницы (номера нет в таблице)
+        const nfRows = [['Страница в исходном PDF', 'Распознанный текст']];
+        results.forEach((r, idx) => {
+            if (r && r.status === 'NOT_IN_TABLE') {
+                nfRows.push([idx + 1, (r.ocrText || '').replace(/\r?\n/g, ' ')]);
+            }
+        });
+        if (nfRows.length > 1) {
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(nfRows), 'Не найдены');
+        }
+
         const logOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
         const logBlob = new Blob([logOut], { type: 'application/octet-stream' });
         document.getElementById('downloadLogBtn').href = URL.createObjectURL(logBlob);
@@ -769,10 +733,11 @@ async function startProcessing() {
             statsEl.className = 'text-muted';
             resultView.insertBefore(statsEl, resultView.querySelector('.d-grid'));
         }
+        const removedPages = results.map((r, i) => (r && r.status === 'NOT_IN_TABLE') ? i + 1 : null).filter(v => v !== null);
         statsEl.innerHTML =
-            `📦 Размер файла: <strong>${sizeMB} МБ</strong> · Этикетки отсортированы по названию товара` +
-            (skippedExcluded > 0 ? `<br>🚫 Удалено вручную: <strong>${skippedExcluded}</strong>` : '') +
-            (skippedCargo > 0 ? `<br>⏭️ Пропущено этикеток (грузомест > 1): <strong>${skippedCargo}</strong>` : '') +
+            `📦 Размер файла: <strong>${sizeMB} МБ</strong> · В PDF этикеток: <strong>${ok}</strong> · Отсортированы по названию` +
+            (skippedCargo > 0 ? `<br>⏭️ Пропущено (грузомест > 1): <strong>${skippedCargo}</strong>` : '') +
+            (removedNotInTable > 0 ? `<br>🚫 Удалено (номера нет в таблице): <strong>${removedNotInTable}</strong> — страницы ${removedPages.join(', ')} (подробности в журнале, лист «Не найдены»)` : '') +
             (Number(sizeMB) > 70 ? '<br>Больше 70 МБ — нажмите «🗜️ Сжать файл», чтобы уменьшить объём.' : '');
 
         processingActive = false;
@@ -784,7 +749,7 @@ async function startProcessing() {
     }
 }
 
-// ===== Сжатие готового файла (как iLovePDF): меньше объём, текст остаётся для поиска =====
+// ===== Сжатие готового файла =====
 async function compressResult() {
     if (!lastOutBytes) { alert('Сначала обработайте файл.'); return; }
     const btn = document.getElementById('btnCompress');
