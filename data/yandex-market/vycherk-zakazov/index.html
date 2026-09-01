@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Вычерк заказов — ЯндексМаркет</title>
+<script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #F2F1F9;
+  color: #1d1d1f;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+.container { max-width: 1600px; margin: 0 auto; padding: 30px 40px; }
+
+.back-btn {
+  background: #E6E3F3; border: none; padding: 12px 24px; border-radius: 10px;
+  cursor: pointer; font-size: 1em; margin-bottom: 25px; color: #1d1d1f; transition: all .2s;
+}
+.back-btn:hover { background: #D8BFD8; }
+
+.sverka-header h2 { font-size: 2em; margin-bottom: 6px; }
+.subtitle { color: #86868b; font-size: 1em; margin-bottom: 30px; }
+
+.sverka-layout { display: grid; grid-template-columns: 1fr 1.1fr 1.1fr; gap: 24px; }
+
+.panel {
+  background: #FBFBFE; border: 1px solid #E7E4F2; border-radius: 12px;
+  overflow: hidden; display: flex; flex-direction: column;
+}
+.panel-header { padding: 16px 20px; border-bottom: 1px solid #E7E4F2; background: #FAF9FD; }
+.panel-header h3 { font-size: 1.1em; }
+.panel-body { padding: 20px; flex: 1; display: flex; flex-direction: column; }
+
+.instruction-panel { border-left: 4px solid #8E4EC6; }
+
+.instruction-steps { list-style: none; }
+.instruction-steps li { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 18px; }
+.step-num {
+  flex-shrink: 0; width: 26px; height: 26px; background: #9148C2; color: #fff;
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: .85em; font-weight: 700;
+}
+
+.important-note { margin-top: auto; padding-top: 16px; font-size: .95em; }
+
+.upload-area {
+  border: 2px dashed #CBBCE2; border-radius: 10px; background: #FAF9FD;
+  min-height: 280px; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 12px; cursor: pointer; transition: all .3s;
+}
+.upload-area:hover, .upload-area.dragover { border-color: #8E4EC6; background: #F5EEFB; }
+
+.upload-btn {
+  background: #C9A6D6; border: none; padding: 12px 28px; border-radius: 8px;
+  font-size: 1em; cursor: pointer; transition: all .2s;
+}
+.upload-btn:hover { background: #B78BC9; }
+
+.hint { color: #86868b; font-size: .85em; }
+.file-name { color: #8E4EC6; font-weight: 600; font-size: .9em; }
+.status { margin-top: 12px; font-size: .9em; color: #86868b; min-height: 1.4em; }
+
+textarea {
+  width: 100%; min-height: 280px; padding: 14px; border: 1px solid #DCD7EA;
+  border-radius: 8px; background: #FAF9FD; font-family: 'Courier New', monospace;
+  font-size: 14px; resize: vertical;
+}
+textarea:focus { outline: none; border-color: #8E4EC6; }
+
+.source-switch { margin-top: 12px; display: flex; gap: 18px; align-items: center; font-size: .9em; }
+.source-switch label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+.upload-btn.small { padding: 6px 16px; font-size: .9em; }
+
+.start-btn {
+  width: 100%; margin-top: 26px; background: #8D4ABB; color: #fff; border: none;
+  padding: 18px; border-radius: 12px; font-size: 1.15em; font-weight: 700;
+  letter-spacing: .5px; cursor: pointer; transition: all .2s;
+}
+.start-btn:hover { background: #7C3FA8; }
+.start-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+.results-section { margin-top: 26px; }
+.results-section h3 { margin-bottom: 14px; }
+canvas { max-width: 100%; border: 1px solid #E7E4F2; border-radius: 10px; background: #fff; display: block; }
+
+.hidden { display: none !important; }
+
+@media (max-width: 1200px) { .sverka-layout { grid-template-columns: 1fr; } .container { padding: 20px 15px; } }
+</style>
+</head>
+<body>
+<div class="container">
+  <button class="back-btn" onclick="window.location.href='../../../index.html'">← В меню</button>
+
+  <div class="sverka-header">
+    <h2>✏️ Вычерк заказов</h2>
+    <p class="subtitle">ЯндексМаркет</p>
+  </div>
+
+  <div class="sverka-layout">
+
+    <!-- Плашка 1: Инструкция -->
+    <div class="panel instruction-panel">
+      <div class="panel-header"><h3>📖 Инструкция</h3></div>
+      <div class="panel-body">
+        <ol class="instruction-steps">
+          <li><span class="step-num">1</span><span>Загрузите PDF с актом</span></li>
+          <li><span class="step-num">2</span><span>Вставьте номера заказов, которые нужно вычеркнуть</span></li>
+          <li><span class="step-num">3</span><span>Нажмите <strong>"ОБРАБОТАТЬ"</strong></span></li>
+          <li><span class="step-num">4</span><span>Скачайте новый акт</span></li>
+        </ol>
+        <p class="important-note">⚠️ <strong>Важно:</strong> программа автоматически находит строки с указанными номерами и выделяет их жёлтой полосой на всю ширину таблицы</p>
+      </div>
+    </div>
+
+    <!-- Плашка 2: PDF с актом -->
+    <div class="panel upload-panel">
+      <div class="panel-header"><h3>📄 PDF с актом</h3></div>
+      <div class="panel-body">
+        <div class="upload-area" id="uploadArea">
+          <input type="file" id="pdfFile" accept=".pdf" style="display:none">
+          <button class="upload-btn" id="choosePdfBtn">Выбрать PDF</button>
+          <p class="hint">или перетащите файл сюда</p>
+          <p id="fileName" class="file-name"></p>
+        </div>
+        <div id="pdfStatus" class="status"></div>
+      </div>
+    </div>
+
+    <!-- Плашка 3: Номера заказов -->
+    <div class="panel reestr-panel">
+      <div class="panel-header"><h3>📋 Номера заказов</h3></div>
+      <div class="panel-body">
+        <textarea id="numbers" placeholder="Вставьте номера заказов (каждый с новой строки)&#10;60572218370&#10;60570946306"></textarea>
+        <div class="source-switch">
+          <label><input type="radio" name="src" value="text" checked id="srcText"> Вставить текст</label>
+          <label><input type="radio" name="src" value="file" id="srcFile"> Загрузить файл</label>
+          <input type="file" id="numFileInput" accept=".txt,.csv" style="display:none">
+          <button class="upload-btn small" id="numFileBtn" style="display:none">⬆️ Файл</button>
+          <span id="numFileName" class="file-name"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <button class="start-btn" id="runBtn">▶️ ОБРАБОТАТЬ</button>
+
+  <div id="resultsSection" class="results-section hidden">
+    <h3>👁️ Предпросмотр (первая страница)</h3>
+    <canvas id="cv"></canvas>
+    <button class="start-btn" id="saveBtn">📥 СКАЧАТЬ PDF</button>
+  </div>
+</div>
+
+<script type="module">
+import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.min.mjs';
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.min.mjs';
+
+const { PDFDocument, rgb } = PDFLib;
+
+const pdfFile = document.getElementById('pdfFile');
+const choosePdfBtn = document.getElementById('choosePdfBtn');
+const uploadArea = document.getElementById('uploadArea');
+const fileName = document.getElementById('fileName');
+const pdfStatus = document.getElementById('pdfStatus');
+const numbers = document.getElementById('numbers');
+const numFileInput = document.getElementById('numFileInput');
+const numFileBtn = document.getElementById('numFileBtn');
+const numFileName = document.getElementById('numFileName');
+const runBtn = document.getElementById('runBtn');
+const saveBtn = document.getElementById('saveBtn');
+const resultsSection = document.getElementById('resultsSection');
+const cv = document.getElementById('cv');
+
+let originalPdfBytes = null;
+let processedPdfBytes = null;
+
+// --- Загрузка PDF ---
+choosePdfBtn.addEventListener('click', e => { e.stopPropagation(); pdfFile.click(); });
+uploadArea.addEventListener('click', () => pdfFile.click());
+
+async function loadPdf(f) {
+  if (!f) return;
+  originalPdfBytes = await f.arrayBuffer();
+  fileName.textContent = '✓ ' + f.name;
+  pdfStatus.textContent = 'PDF загружен. Можно нажимать «ОБРАБОТАТЬ».';
+  processedPdfBytes = null;
+  resultsSection.classList.add('hidden');
+}
+pdfFile.addEventListener('change', e => loadPdf(e.target.files[0]));
+
+['dragover', 'dragenter'].forEach(ev => uploadArea.addEventListener(ev, e => { e.preventDefault(); uploadArea.classList.add('dragover'); }));
+['dragleave', 'drop'].forEach(ev => uploadArea.addEventListener(ev, e => { e.preventDefault(); uploadArea.classList.remove('dragover'); }));
+uploadArea.addEventListener('drop', e => loadPdf(e.dataTransfer.files[0]));
+
+// --- Переключатель текст/файл для номеров ---
+document.querySelectorAll('input[name="src"]').forEach(r => r.addEventListener('change', () => {
+  const isFile = document.getElementById('srcFile').checked;
+  numFileBtn.style.display = isFile ? 'inline-block' : 'none';
+}));
+numFileBtn.addEventListener('click', () => numFileInput.click());
+numFileInput.addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = ev => { numbers.value = ev.target.result; numFileName.textContent = '✓ ' + f.name; };
+  reader.readAsText(f);
+});
+
+// --- Обработка ---
+runBtn.addEventListener('click', async () => {
+  if (!originalPdfBytes) { alert('Сначала загрузите PDF'); return; }
+  const nums = numbers.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  if (!nums.length) { alert('Введите номера заказов'); return; }
+
+  runBtn.disabled = true;
+  try {
+    pdfStatus.textContent = 'Анализирую PDF...';
+    const pdf = await pdfjsLib.getDocument({ data: originalPdfBytes.slice(0) }).promise;
+    const numPages = pdf.numPages;
+
+    const pagesData = [];
+    for (let p = 1; p <= numPages; p++) {
+      const page = await pdf.getPage(p);
+      const tc = await page.getTextContent();
+      const viewport = page.getViewport({ scale: 1 });
+
+      let tableMinX = Infinity, tableMaxX = -Infinity;
+      const items = tc.items.filter(it => it.str && it.str.trim()).map(it => {
+        const x = it.transform[4], w = it.width;
+        tableMinX = Math.min(tableMinX, x);
+        tableMaxX = Math.max(tableMaxX, x + w);
+        return { str: it.str, x, y: it.transform[5], w, h: it.height };
+      });
+
+      pagesData.push({ pageNum: p, tableMinX, tableMaxX, items });
+    }
+
+    const foundRows = new Map();
+    for (const num of nums) {
+      const cleanNum = num.replace(/\s+/g, '');
+      for (const page of pagesData) {
+        const items = page.items;
+        for (let i = 0; i < items.length; i++) {
+          let acc = '', rowY = items[i].y, rowH = items[i].h;
+          for (let j = i; j < items.length; j++) {
+            if (j > i) {
+              const dx = items[j].x - (items[j-1].x + items[j-1].w);
+              const dy = Math.abs(items[j].y - rowY);
+              if (dx > 30 || dy > rowH * 0.5) break;
+            }
+            acc += items[j].str.replace(/[^0-9]/g, '');
+            rowH = Math.max(rowH, items[j].h);
+            if (acc === cleanNum) {
+              const key = `${page.pageNum}_${Math.round(rowY / 2) * 2}`;
+              if (!foundRows.has(key)) {
+                foundRows.set(key, { pageNum: page.pageNum, y: rowY, tableMinX: page.tableMinX, tableMaxX: page.tableMaxX });
+              }
+              break;
+            }
+            if (acc.length > cleanNum.length + 2) break;
+          }
+        }
+      }
+    }
+
+    pdfStatus.textContent = `Найдено строк: ${foundRows.size}. Модифицирую PDF...`;
+
+    const pdfDoc = await PDFDocument.load(originalPdfBytes.slice(0));
+    const pages = pdfDoc.getPages();
+    const LINE_HEIGHT = 3, LINE_Y_OFFSET = -2;
+
+    for (const row of foundRows.values()) {
+      pages[row.pageNum - 1].drawRectangle({
+        x: row.tableMinX,
+        y: row.y + LINE_Y_OFFSET,
+        width: row.tableMaxX - row.tableMinX,
+        height: LINE_HEIGHT,
+        color: rgb(1, 0.92, 0.23),
+        opacity: 0.6,
+        borderWidth: 0
+      });
+    }
+
+    processedPdfBytes = await pdfDoc.save();
+
+    const previewPdf = await pdfjsLib.getDocument({ data: processedPdfBytes.slice(0) }).promise;
+    const previewPage = await previewPdf.getPage(1);
+    const vp = previewPage.getViewport({ scale: 1.5 });
+    cv.width = vp.width; cv.height = vp.height;
+    await previewPage.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+
+    resultsSection.classList.remove('hidden');
+    pdfStatus.textContent = `Готово. Выделено строк: ${foundRows.size}.`;
+  } catch (err) {
+    console.error(err);
+    pdfStatus.textContent = 'Ошибка: ' + err.message;
+  } finally {
+    runBtn.disabled = false;
+  }
+});
+
+// --- Скачивание ---
+saveBtn.addEventListener('click', () => {
+  if (!processedPdfBytes) return;
+  const blob = new Blob([processedPdfBytes], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'akt_marked_' + new Date().toISOString().replace(/[:.]/g, '-') + '.pdf';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+</script>
+</body>
+</html>

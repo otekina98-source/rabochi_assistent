@@ -19,4 +19,9 @@ id: 'podpis-etiketok',
 title: 'Подпись этикеток',
 path: 'data/yandex-market/podpis-etiketok/index.html'
 },
+{
+id: 'vycherk-zakazov',
+title: 'Вычерк заказов',
+path: 'data/yandex-market/vycherk-zakazov/index.html'
+},
 ];

@@ -4,6 +4,7 @@ const state = {
     manualExcluded: new Set(),
     priceMap: {},
     mapping: new Map(),
+    orderIndex: new Map(),
     tableData: [],
     pdfFile: null,
     previewScale: 1,
@@ -69,14 +70,26 @@ function loadScript(src) {
     });
 }
 
-// ===== Поиск ТОЛЬКО номеров из таблицы (даже внутри слипшихся чисел) =====
+// ===== Поиск ТОЛЬКО номеров из таблицы (с учётом whitespace между цифрами) =====
 function findTableOrderId(text, tableIds) {
-    if (!text || !tableIds.length) return null;
-    const compact = text.replace(/\s+/g, '');
+    if (!text || !tableIds.length) return { status: 'not_found' };
+    const found = new Set();
     for (const id of tableIds) {
-        if (id && id.length >= 5 && compact.includes(id)) return id;
+        if (!id || id.length < 5) continue;
+        // Экранируем спецсимволы RegExp
+        const escapedId = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // Между соседними символами ID разрешаем произвольное количество whitespace
+        const flexibleId = escapedId.split('').join('\\s*');
+        // Границы: перед началом и после конца ID не должно быть цифры
+        const re = new RegExp('(^|[^0-9])' + flexibleId + '($|[^0-9])');
+        if (re.test(text)) {
+            found.add(id);
+        }
     }
-    return null;
+    const arr = Array.from(found);
+    if (arr.length === 0) return { status: 'not_found' };
+    if (arr.length === 1) return { status: 'found', orderId: arr[0] };
+    return { status: 'ambiguous', candidates: arr };
 }
 
 // ===== Позиционирование текста — ТОЧНО как в рабочем коде (add_name_and_rename.py) =====
@@ -132,6 +145,7 @@ function setupDropZone(zoneId, inputId, handler) {
     });
 }
 
+// Запоминаем исходный вид зон, чтобы работала кнопка «🔄 Загрузить другой файл»
 const ordersZoneHTML = document.getElementById('ordersDropZone').innerHTML;
 const priceZoneHTML = document.getElementById('priceDropZone').innerHTML;
 const pdfZoneHTML = document.getElementById('pdfDropZone').innerHTML;
@@ -259,11 +273,60 @@ function sortByName(a, b) {
 function rebuildTable() {
     state.manualExcluded = parseManualExclusions();
     const activeOrders = state.orders.filter(o => !state.manualExcluded.has(o.orderId));
-    state.mapping = new Map();
+
+    // === Построение безопасного индекса orderIndex ===
+    state.orderIndex = new Map();
+    const groups = new Map(); // orderId -> [order1, order2, ...]
+
+    for (const order of activeOrders) {
+        if (!order.orderId) continue;
+        if (!groups.has(order.orderId)) groups.set(order.orderId, []);
+        groups.get(order.orderId).push(order);
+    }
+
+    for (const [orderId, rows] of groups) {
+        const productNames = rows.map(r => state.priceMap[r.sku] || null);
+
+        if (rows.length === 1) {
+            state.orderIndex.set(orderId, {
+                status: 'unique',
+                order: { ...rows[0], productName: productNames[0] }
+            });
+        } else {
+            const first = rows[0];
+            const firstProductName = productNames[0];
+            const allIdentical = rows.every((r, i) =>
+                normalizeSku(r.sku) === normalizeSku(first.sku) &&
+                productNames[i] === firstProductName &&
+                r.cargo === first.cargo
+            );
+            if (allIdentical) {
+                state.orderIndex.set(orderId, {
+                    status: 'duplicate_identical',
+                    order: { ...first, productName: firstProductName }
+                });
+            } else {
+                state.orderIndex.set(orderId, {
+                    status: 'duplicate_conflict',
+                    candidates: rows.map((r, i) => ({ ...r, productName: productNames[i] }))
+                });
+            }
+        }
+    }
+
+    // === Построение tableData: конфликт проверяется ПЕРВЫМ ===
     state.tableData = activeOrders.map(order => {
         const productName = state.priceMap[order.sku] || null;
-        if (productName && order.orderId) state.mapping.set(order.orderId, productName);
-        return { ...order, productName, status: productName ? 'FOUND' : 'NOT_FOUND' };
+        const indexEntry = order.orderId ? state.orderIndex.get(order.orderId) : null;
+        let status;
+        if (indexEntry && indexEntry.status === 'duplicate_conflict') {
+            status = 'DUPLICATE_CONFLICT';
+        } else if (!productName) {
+            status = 'NOT_FOUND';
+        } else {
+            status = 'FOUND';
+        }
+        return { ...order, productName, status };
     });
     state.tableData.sort(sortByName);
     renderTable(state.tableData);
@@ -278,14 +341,14 @@ function matchAndShowTable() {
 }
 
 function renderTable(data) {
-    document.querySelector('#resultTable tbody').innerHTML = data.map(row => `
-        <tr class="${row.status === 'NOT_FOUND' ? 'table-danger' : ''}">
-            <td>${row.rawOrderId}</td>
-            <td><code>${row.sku}</code></td>
-            <td>${row.productName || '<em class="text-muted">-</em>'}</td>
-            <td>${row.status === 'FOUND' ? '✅' : '❌'}</td>
-        </tr>
-    `).join('');
+    document.querySelector('#resultTable tbody').innerHTML = data.map(row => {
+        let rowClass = '';
+        let statusIcon = '❌';
+        if (row.status === 'NOT_FOUND')           { rowClass = 'table-danger';  statusIcon = '❌'; }
+        else if (row.status === 'DUPLICATE_CONFLICT') { rowClass = 'table-warning'; statusIcon = '⚠️'; }
+        else if (row.status === 'FOUND')          { statusIcon = '✅'; }
+        return `<tr class="${rowClass}"> <td>${row.rawOrderId}</td> <td><code>${row.sku}</code></td> <td>${row.productName || '<em class="text-muted">-</em>'}</td> <td>${statusIcon}</td> </tr>`;
+    }).join('');
     document.getElementById('tableInfo').textContent = `Показано ${data.length} записей`;
 }
 
@@ -381,18 +444,7 @@ function ensureCompressControls() {
     const wrap = document.createElement('div');
     wrap.id = 'compressRow';
     wrap.className = 'alert alert-info small py-2 mt-2';
-    wrap.innerHTML = `
-        <div class="form-check form-switch">
-            <input class="form-check-input" type="checkbox" id="cfgCompress" checked>
-            <label class="form-check-label" for="cfgCompress">Сжать файл</label>
-        </div>
-        <select class="form-select form-select-sm mt-1" id="cfgCompressLevel">
-            <option value="quality" selected>Без потери качества</option>
-            <option value="balance">Баланс (размер / качество)</option>
-            <option value="min">Минимальный размер</option>
-        </select>
-        <div class="text-muted" style="margin-top:4px;">Выключить — файл соберётся в исходном виде (большой размер).</div>
-    `;
+    wrap.innerHTML = `<div class="form-check form-switch"> <input class="form-check-input" type="checkbox" id="cfgCompress" checked> <label class="form-check-label" for="cfgCompress">Сжать файл</label> </div> <select class="form-select form-select-sm mt-1" id="cfgCompressLevel"> <option value="quality" selected>Без потери качества</option> <option value="balance">Баланс (размер / качество)</option> <option value="min">Минимальный размер</option> </select> <div class="text-muted" style="margin-top:4px;">Выключить — файл соберётся в исходном виде (большой размер).</div>`;
     btn.parentNode.insertBefore(wrap, btn);
 }
 
@@ -615,34 +667,56 @@ async function startProcessing() {
                 cropCv.getContext('2d').drawImage(cv, 0, 0, cv.width, cropPx, 0, 0, cv.width, cropPx);
                 const fast = await worker.recognize(cropCv);
                 text = fast.data.text || '';
-                let orderId = findTableOrderId(text, tableIds);
+                let match = findTableOrderId(text, tableIds);
 
-                if (!orderId) {
+                if (match.status === 'not_found') {
                     const full = await worker.recognize(cv);
                     text = full.data.text || '';
-                    orderId = findTableOrderId(text, tableIds);
+                    match = findTableOrderId(text, tableIds);
                 }
 
-                if (!orderId) {
+                if (match.status === 'ambiguous') {
+                    // Несколько кандидатов: НЕ выбираем случайный, название не наносим
+                    results[idx] = { status: 'AMBIGUOUS', candidates: match.candidates, ocrText: text.substring(0, 200) };
+                    pageOut[idx] = { skip: true };
+                } else if (match.status === 'found') {
+                    const orderId = match.orderId;
+                    const indexEntry = state.orderIndex ? state.orderIndex.get(orderId) : null;
+
+                    if (!indexEntry) {
+                        // orderId не найден в индексе — удаляем
+                        results[idx] = { status: 'NOT_IN_TABLE', ocrText: text.substring(0, 200) };
+                        pageOut[idx] = { skip: true };
+                    } else if (indexEntry.status === 'duplicate_conflict') {
+                        // Конфликт: НЕ выбираем ни одну строку, название не наносим, пропускаем страницу
+                        results[idx] = {
+                            status: 'DUPLICATE_CONFLICT',
+                            orderId,
+                            candidates: indexEntry.candidates,
+                            ocrText: text.substring(0, 200)
+                        };
+                        pageOut[idx] = { skip: true };
+                    } else {
+                        // unique или duplicate_identical — используем каноническую запись
+                        const order = indexEntry.order;
+                        const productName = order.productName || null;
+                        const orderCargo = order.cargo || 1;
+
+                        if (orderCargo > 1) {
+                            results[idx] = { status: 'CARGO', orderId, productName, cargo: orderCargo };
+                            pageOut[idx] = { skip: true };
+                        } else {
+                            if (productName) {
+                                drawLabel(pdfDoc, idx, font, rotations[idx], productName, cfg);
+                            }
+                            results[idx] = { status: 'OK', orderId, productName, cargo: orderCargo };
+                            pageOut[idx] = { ok: true };
+                        }
+                    }
+                } else {
                     // Номера из таблицы на наклейке нет → удаляем автоматом
                     results[idx] = { status: 'NOT_IN_TABLE', ocrText: text.substring(0, 200) };
                     pageOut[idx] = { skip: true };
-                } else {
-                    const productName = state.mapping.get(orderId) || null;
-                    let orderCargo = 1;
-                    const foundOrder = state.orders.find(o => o.orderId === orderId);
-                    if (foundOrder && foundOrder.cargo !== undefined) orderCargo = foundOrder.cargo;
-
-                    if (orderCargo > 1) {
-                        results[idx] = { status: 'CARGO', orderId, productName, cargo: orderCargo };
-                        pageOut[idx] = { skip: true };
-                    } else {
-                        if (productName) {
-                            drawLabel(pdfDoc, idx, font, rotations[idx], productName, cfg);
-                        }
-                        results[idx] = { status: 'OK', orderId, productName, cargo: orderCargo };
-                        pageOut[idx] = { ok: true };
-                    }
                 }
 
                 done++;
@@ -665,10 +739,14 @@ async function startProcessing() {
 
         let skippedCargo = 0;
         let removedNotInTable = 0;
+        let ambiguousCount = 0;
+        let duplicateConflictCount = 0;
         results.forEach(r => {
             if (!r) return;
             if (r.status === 'CARGO') skippedCargo++;
             if (r.status === 'NOT_IN_TABLE') removedNotInTable++;
+            if (r.status === 'AMBIGUOUS') ambiguousCount++;
+            if (r.status === 'DUPLICATE_CONFLICT') duplicateConflictCount++;
         });
 
         const outDoc = await PDFLib.PDFDocument.create();
@@ -702,16 +780,25 @@ async function startProcessing() {
             let status;
             if (r.status === 'CARGO') status = '⏭️ Пропущена (Грузоместа > 1)';
             else if (r.status === 'NOT_IN_TABLE') status = '🚫 Удалена (номера нет в таблице)';
+            else if (r.status === 'AMBIGUOUS') status = '⚠️ AMBIGUOUS (кандидаты: ' + (r.candidates || []).join(', ') + ')';
+            else if (r.status === 'DUPLICATE_CONFLICT') status = '⚠️ DUPLICATE_CONFLICT (конфликт данных: ' + (r.candidates || []).length + ' строк)';
             else status = r.productName ? '✅ Обработано' : '✅ Обработано (без названия)';
             wsData.push([idx + 1, status, r.orderId || '-', r.productName || '-', r.cargo || 1, r.ocrText || '-']);
         });
         XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(wsData), 'Журнал');
 
-        // Отдельный лист: удалённые страницы (номера нет в таблице)
-        const nfRows = [['Страница в исходном PDF', 'Распознанный текст']];
+        // Отдельный лист: удалённые и неоднозначные страницы
+        const nfRows = [['Страница в исходном PDF', 'Причина', 'Кандидаты / распознанный текст']];
         results.forEach((r, idx) => {
             if (r && r.status === 'NOT_IN_TABLE') {
-                nfRows.push([idx + 1, (r.ocrText || '').replace(/\r?\n/g, ' ')]);
+                nfRows.push([idx + 1, 'Удалена (номера нет в таблице)', (r.ocrText || '').replace(/\r?\n/g, ' ')]);
+            }
+            if (r && r.status === 'AMBIGUOUS') {
+                nfRows.push([idx + 1, 'AMBIGUOUS (несколько кандидатов)', (r.candidates || []).join(', ') + ' | ' + (r.ocrText || '').replace(/\r?\n/g, ' ')]);
+            }
+            if (r && r.status === 'DUPLICATE_CONFLICT') {
+                const candList = (r.candidates || []).map(c => `${c.sku}|cargo:${c.cargo}`).join('; ');
+                nfRows.push([idx + 1, 'DUPLICATE_CONFLICT (данные Excel расходятся)', candList + ' | ' + (r.ocrText || '').replace(/\r?\n/g, ' ')]);
             }
         });
         if (nfRows.length > 1) {
@@ -734,11 +821,18 @@ async function startProcessing() {
             resultView.insertBefore(statsEl, resultView.querySelector('.d-grid'));
         }
         const removedPages = results.map((r, i) => (r && r.status === 'NOT_IN_TABLE') ? i + 1 : null).filter(v => v !== null);
+        const ambiguousPages = results.map((r, i) => (r && r.status === 'AMBIGUOUS') ? i + 1 : null).filter(v => v !== null);
+        const duplicatePages = results.map((r, i) => (r && r.status === 'DUPLICATE_CONFLICT') ? i + 1 : null).filter(v => v !== null);
+
         statsEl.innerHTML =
             `📦 Размер файла: <strong>${sizeMB} МБ</strong> · В PDF этикеток: <strong>${ok}</strong> · Отсортированы по названию` +
             (skippedCargo > 0 ? `<br>⏭️ Пропущено (грузомест > 1): <strong>${skippedCargo}</strong>` : '') +
-            (removedNotInTable > 0 ? `<br>🚫 Удалено (номера нет в таблице): <strong>${removedNotInTable}</strong> — страницы ${removedPages.join(', ')}             
+            (removedNotInTable > 0 ? `<br>🚫 Удалено (номера нет в таблице): <strong>${removedNotInTable}</strong> — страницы ${removedPages.join(', ')}` : '') +
+            (ambiguousCount > 0 ? `<br>⚠️ Неоднозначно (несколько кандидатов, название НЕ нанесено): <strong>${ambiguousCount}</strong> — страницы ${ambiguousPages.join(', ')} (подробности в журнале, лист «Не найдены»)` : '') +
+            (duplicateConflictCount > 0 ? `<br>⚠️ Конфликт дубликатов (данные Excel расходятся): <strong>${duplicateConflictCount}</strong> — страницы ${duplicatePages.join(', ')} (название НЕ нанесено, подробности в журнале)` : '');
+
         processingActive = false;
+
     } catch (err) {
         console.error(err);
         processingActive = false;
