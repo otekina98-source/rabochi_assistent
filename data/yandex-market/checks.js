@@ -24,4 +24,9 @@ id: 'vycherk-zakazov',
 title: 'Вычерк заказов',
 path: 'data/yandex-market/vycherk-zakazov/index.html'
 },
+{
+id: 'otmeny',
+title: 'Отмены Яндекс',
+path: 'data/yandex-market/otmeny/index.html'
+},
 ];

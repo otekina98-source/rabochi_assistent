@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Отмены Яндекс — ЯндексМаркет</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #F2F1F9;
+  color: #1d1d1f;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+.container { max-width: 1600px; margin: 0 auto; padding: 30px 40px; }
+
+.back-btn {
+  background: #E6E3F3; border: none; padding: 12px 24px; border-radius: 10px;
+  cursor: pointer; font-size: 1em; margin-bottom: 25px; color: #1d1d1f; transition: all .2s;
+}
+.back-btn:hover { background: #D8BFD8; }
+
+.sverka-header h2 { font-size: 2em; margin-bottom: 6px; }
+.subtitle { color: #86868b; font-size: 1em; margin-bottom: 30px; }
+
+.sverka-layout { display: grid; grid-template-columns: 1fr 1.1fr 1.1fr; gap: 24px; }
+
+.panel {
+  background: #FBFBFE; border: 1px solid #E7E4F2; border-radius: 12px;
+  overflow: hidden; display: flex; flex-direction: column;
+}
+.panel-header {
+  padding: 16px 20px; border-bottom: 1px solid #E7E4F2; background: #FAF9FD;
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+}
+.panel-header h3 { font-size: 1.1em; }
+.panel-body { padding: 20px; flex: 1; display: flex; flex-direction: column; }
+
+.instruction-panel { border-left: 4px solid #8E4EC6; }
+
+.instruction-steps { list-style: none; }
+.instruction-steps li { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
+.step-num {
+  flex-shrink: 0; width: 26px; height: 26px; background: #9148C2; color: #fff;
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: .85em; font-weight: 700;
+}
+
+.important-note { margin-top: auto; padding-top: 16px; font-size: .95em; }
+
+textarea {
+  width: 100%; min-height: 280px; padding: 14px; border: 1px solid #DCD7EA;
+  border-radius: 8px; background: #FAF9FD; font-family: 'Courier New', monospace;
+  font-size: 14px; resize: vertical; flex: 1;
+}
+textarea:focus { outline: none; border-color: #8E4EC6; }
+
+.start-btn {
+  width: 100%; margin-top: 26px; background: #8D4ABB; color: #fff; border: none;
+  padding: 18px; border-radius: 12px; font-size: 1.15em; font-weight: 700;
+  letter-spacing: .5px; cursor: pointer; transition: all .2s;
+}
+.start-btn:hover { background: #7C3FA8; }
+
+.secondary-row { display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+.secondary-btn {
+  background: #E6E3F3; border: none; padding: 12px 24px; border-radius: 10px;
+  cursor: pointer; font-size: .95em; color: #1d1d1f; transition: all .2s;
+}
+.secondary-btn:hover { background: #D8BFD8; }
+
+.result-panel { margin-top: 26px; }
+
+.counter {
+  background: #8D4ABB; color: #fff; padding: 4px 14px; border-radius: 999px;
+  font-size: 13px; font-weight: 600; white-space: nowrap;
+}
+
+.result-list {
+  display: flex; flex-wrap: wrap; gap: 8px; max-height: 500px; overflow-y: auto; padding: 4px;
+}
+
+.order-chip {
+  background: #F5F3FB; border: 1px solid #E7E4F2; padding: 8px 14px; border-radius: 8px;
+  font-family: 'Courier New', monospace; font-size: 14px; cursor: pointer;
+  transition: all .15s; user-select: none;
+}
+.order-chip:hover { background: #8D4ABB; color: #fff; border-color: #8D4ABB; transform: scale(1.03); }
+.order-chip.copied { background: #9148C2; color: #fff; border-color: #9148C2; }
+.order-chip.just-copied { background: #10b981 !important; color: #fff !important; border-color: #10b981 !important; animation: pulse .3s ease; }
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+.empty { text-align: center; color: #86868b; padding: 30px; font-size: 14px; width: 100%; }
+
+.toast {
+  position: fixed; bottom: 30px; left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background: #1d1d1f; color: #fff; padding: 12px 24px; border-radius: 8px;
+  font-size: 14px; opacity: 0; transition: all .3s; pointer-events: none; z-index: 1000;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+@media (max-width: 1200px) { .sverka-layout { grid-template-columns: 1fr; } .container { padding: 20px 15px; } }
+</style>
+</head>
+<body>
+<div class="container">
+  <button class="back-btn" onclick="window.location.href='../../../index.html'">← В меню</button>
+
+  <div class="sverka-header">
+    <h2>📦 Отмены Яндекс</h2>
+    <p class="subtitle">ЯндексМаркет</p>
+  </div>
+
+  <div class="sverka-layout">
+
+    <!-- Плашка 1: Инструкция -->
+    <div class="panel instruction-panel">
+      <div class="panel-header"><h3>📖 Инструкция</h3></div>
+      <div class="panel-body">
+        <ol class="instruction-steps">
+          <li><span class="step-num">1</span><span>Скачайте из ЛК «Список заказов»</span></li>
+          <li><span class="step-num">2</span><span>Удалите все столбики, кроме «Номер заказа» и «Статус заказа»</span></li>
+          <li><span class="step-num">3</span><span>Поставьте фильтр: <strong>«Отменён в процессе обработки»</strong></span></li>
+          <li><span class="step-num">4</span><span>Скопируйте только номера заказов в <strong>Список №1</strong></span></li>
+          <li><span class="step-num">5</span><span>Сделайте реестр в 1С и вставьте номера из столбика «Идентификатор» в <strong>Список №2</strong></span></li>
+          <li><span class="step-num">6</span><span>Нажмите <strong>"НАЙТИ СОВПАДЕНИЯ"</strong></span></li>
+          <li><span class="step-num">7</span><span>Внизу будут номера, которые нужно отменить в 1С</span></li>
+        </ol>
+        <p class="important-note">⚠️ <strong>Важно:</strong> когда много заказов, то и отмен тоже много. Щёлкать каждый заказ и проверять, отменён он или нет, долго — к тому же половина уже отменена в 1С. Сверка выбирает именно те номера, которые в 1С ещё не отменены.</p>
+      </div>
+    </div>
+
+    <!-- Плашка 2: Список №1 -->
+    <div class="panel">
+      <div class="panel-header"><h3>📄 Список №1 из ЛК</h3></div>
+      <div class="panel-body">
+        <textarea id="list1" placeholder="Вставьте номера заказов из ЛК (каждый с новой строки)"></textarea>
+      </div>
+    </div>
+
+    <!-- Плашка 3: Список №2 -->
+    <div class="panel">
+      <div class="panel-header"><h3>📋 Список №2 из реестра 1С</h3></div>
+      <div class="panel-body">
+        <textarea id="list2" placeholder="Вставьте номера заказов из реестра 1С (каждый с новой строки)"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <button class="start-btn" onclick="findIntersection()">🔍 НАЙТИ СОВПАДЕНИЯ</button>
+
+  <div class="secondary-row">
+    <button class="secondary-btn" onclick="clearAll()">🗑️ Очистить</button>
+    <button class="secondary-btn" onclick="copyAll()">📋 Скопировать все</button>
+    <button class="secondary-btn" onclick="resetCopied()">♻️ Сбросить отметки</button>
+  </div>
+
+  <!-- Результат -->
+  <div class="panel result-panel">
+    <div class="panel-header">
+      <h3>📊 Результат — номера, которые нужно отменить в 1С</h3>
+      <span class="counter" id="counter">0 совпадений</span>
+    </div>
+    <div class="panel-body">
+      <div class="result-list" id="result">
+        <div class="empty">Вставьте списки и нажмите «Найти совпадения»</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">Скопировано!</div>
+
+<script>
+  function parseList(text) {
+    return text
+      .split(/[\s,;]+/)
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
+  }
+
+  function findIntersection() {
+    const list1 = parseList(document.getElementById('list1').value);
+    const list2 = parseList(document.getElementById('list2').value);
+    const set2 = new Set(list2);
+
+    const seen = new Set();
+    const result = [];
+    for (const item of list1) {
+      if (set2.has(item) && !seen.has(item)) {
+        seen.add(item);
+        result.push(item);
+      }
+    }
+
+    renderResult(result);
+  }
+
+  function renderResult(items) {
+    const container = document.getElementById('result');
+    const counter = document.getElementById('counter');
+    counter.textContent = items.length + ' ' + plural(items.length, 'совпадение', 'совпадения', 'совпадений');
+
+    if (items.length === 0) {
+      container.innerHTML = '<div class="empty">Совпадений не найдено</div>';
+      return;
+    }
+
+    container.innerHTML = '';
+    items.forEach(num => {
+      const chip = document.createElement('div');
+      chip.className = 'order-chip';
+      chip.textContent = num;
+      chip.title = 'Нажмите, чтобы скопировать';
+      chip.onclick = () => copyChip(num, chip);
+      container.appendChild(chip);
+    });
+  }
+
+  function copyChip(num, el) {
+    navigator.clipboard.writeText(num).then(() => {
+      if (el.classList.contains('copied')) {
+        showToast('Скопировано: ' + num);
+        return;
+      }
+      el.classList.add('just-copied');
+      showToast('Скопировано: ' + num);
+      setTimeout(() => {
+        el.classList.remove('just-copied');
+        el.classList.add('copied');
+      }, 300);
+    });
+  }
+
+  function copyAll() {
+    const chips = document.querySelectorAll('.order-chip');
+    if (chips.length === 0) { showToast('Нет данных для копирования'); return; }
+    const text = Array.from(chips).map(c => c.textContent).join('\n');
+    navigator.clipboard.writeText(text).then(() => {
+      showToast('Скопировано ' + chips.length + ' номеров');
+    });
+  }
+
+  function clearAll() {
+    document.getElementById('list1').value = '';
+    document.getElementById('list2').value = '';
+    document.getElementById('result').innerHTML = '<div class="empty">Вставьте списки и нажмите «Найти совпадения»</div>';
+    document.getElementById('counter').textContent = '0 совпадений';
+  }
+
+  function resetCopied() {
+    document.querySelectorAll('.order-chip').forEach(chip => {
+      chip.classList.remove('copied', 'just-copied');
+    });
+    showToast('Отметки сброшены');
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => t.classList.remove('show'), 1800);
+  }
+
+  function plural(n, one, two, five) {
+    let f = Math.abs(n) % 100, n1 = f % 10;
+    if (f > 10 && f < 20) return five;
+    if (n1 > 1 && n1 < 5) return two;
+    if (n1 === 1) return one;
+    return five;
+  }
+
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') findIntersection();
+  });
+</script>
+</body>
+</html>
