@@ -1,341 +1,372 @@
 * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: #FAF8FF;
-    color: #1d1d1f;
-    line-height: 1.6;
-    min-height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: #FAF8FF;
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%22400%22%20height%3D%22400%22%3E%0A%20%20%3Cline%20x1%3D%2240%22%20y1%3D%2220%22%20x2%3D%22110%22%20y2%3D%2250%22%20stroke%3D%22%23D8BFD8%22%20stroke-width%3D%220.5%22%20opacity%3D%220.4%22/%3E%0A%20%20%3Cline%20x1%3D%22220%22%20y1%3D%2210%22%20x2%3D%22310%22%20y2%3D%2235%22%20stroke%3D%22%23D8BFD8%22%20stroke-width%3D%220.5%22%20opacity%3D%220.4%22/%3E%0A%20%20%3Cline%20x1%3D%22150%22%20y1%3D%22180%22%20x2%3D%22240%22%20y2%3D%22140%22%20stroke%3D%22%23D8BFD8%22%20stroke-width%3D%220.5%22%20opacity%3D%220.4%22/%3E%0A%20%20%3Cline%20x1%3D%22320%22%20y1%3D%22220%22%20x2%3D%22390%22%20y2%3D%22260%22%20stroke%3D%22%23D8BFD8%22%20stroke-width%3D%220.5%22%20opacity%3D%220.4%22/%3E%0A%20%20%3Cline%20x1%3D%2220%22%20y1%3D%22350%22%20x2%3D%22100%22%20y2%3D%22320%22%20stroke%3D%22%23D8BFD8%22%20stroke-width%3D%220.5%22%20opacity%3D%220.4%22/%3E%0A%20%20%3Cline%20x1%3D%22260%22%20y1%3D%22370%22%20x2%3D%22350%22%20y2%3D%22390%22%20stroke%3D%22%23D8BFD8%22%20stroke-width%3D%220.5%22%20opacity%3D%220.4%22/%3E%0A%20%20%3Cg%20stroke%3D%22%23C9A9C9%22%20stroke-width%3D%221.2%22%20fill%3D%22none%22%20opacity%3D%220.35%22%20transform%3D%22translate%28320%2C%2060%29%22%3E%3Crect%20x%3D%220%22%20y%3D%220%22%20width%3D%2230%22%20height%3D%2255%22%20rx%3D%223%22/%3E%3Cline%20x1%3D%220%22%20y1%3D%2222%22%20x2%3D%2230%22%20y2%3D%2222%22/%3E%3Cline%20x1%3D%224%22%20y1%3D%227%22%20x2%3D%224%22%20y2%3D%2217%22/%3E%3Cline%20x1%3D%224%22%20y1%3D%2228%22%20x2%3D%224%22%20y2%3D%2245%22/%3E%3C/g%3E%0A%20%20%3Cg%20stroke%3D%22%23C9A9C9%22%20stroke-width%3D%221.2%22%20fill%3D%22none%22%20opacity%3D%220.35%22%20transform%3D%22translate%2860%2C%20240%29%22%3E%3Crect%20x%3D%220%22%20y%3D%2210%22%20width%3D%2245%22%20height%3D%2232%22%20rx%3D%223%22/%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2220%22%20r%3D%224.5%22/%3E%3Ccircle%20cx%3D%2233%22%20cy%3D%2220%22%20r%3D%224.5%22/%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2232%22%20r%3D%223%22/%3E%3Ccircle%20cx%3D%2233%22%20cy%3D%2232%22%20r%3D%223%22/%3E%3Crect%20x%3D%2210%22%20y%3D%222%22%20width%3D%2225%22%20height%3D%228%22%20rx%3D%222%22/%3E%3C/g%3E%0A%20%20%3Cg%20stroke%3D%22%23C9A9C9%22%20stroke-width%3D%221.2%22%20fill%3D%22none%22%20opacity%3D%220.35%22%20transform%3D%22translate%28230%2C%20280%29%22%3E%3Crect%20x%3D%220%22%20y%3D%2212%22%20width%3D%2255%22%20height%3D%2236%22%20rx%3D%225%22/%3E%3Crect%20x%3D%226%22%20y%3D%2218%22%20width%3D%2243%22%20height%3D%2224%22%20rx%3D%223%22/%3E%3Ccircle%20cx%3D%2227%22%20cy%3D%2230%22%20r%3D%222.5%22/%3E%3Cpath%20d%3D%22M%2027%2012%20L%2027%204%20M%2022%204%20L%2032%204%22%20stroke-width%3D%221.5%22/%3E%3C/g%3E%0A%20%20%3Cg%20stroke%3D%22%23C9A9C9%22%20stroke-width%3D%221.2%22%20fill%3D%22none%22%20opacity%3D%220.35%22%20transform%3D%22translate%28100%2C%2050%29%22%3E%3Crect%20x%3D%220%22%20y%3D%220%22%20width%3D%2245%22%20height%3D%2245%22%20rx%3D%223%22/%3E%3Ccircle%20cx%3D%2222%22%20cy%3D%2226%22%20r%3D%2212%22/%3E%3Ccircle%20cx%3D%229%22%20cy%3D%228%22%20r%3D%222%22/%3E%3Ccircle%20cx%3D%2217%22%20cy%3D%228%22%20r%3D%222%22/%3E%3Crect%20x%3D%2226%22%20y%3D%226%22%20width%3D%2214%22%20height%3D%225%22%20rx%3D%221%22/%3E%3C/g%3E%0A%20%20%3Cg%20stroke%3D%22%23C9A9C9%22%20stroke-width%3D%221.2%22%20fill%3D%22none%22%20opacity%3D%220.35%22%20transform%3D%22translate%28180%2C%20160%29%22%3E%3Cellipse%20cx%3D%2224%22%20cy%3D%2234%22%20rx%3D%2222%22%20ry%3D%229%22/%3E%3Cellipse%20cx%3D%2224%22%20cy%3D%2226%22%20rx%3D%2222%22%20ry%3D%227%22/%3E%3Crect%20x%3D%228%22%20y%3D%226%22%20width%3D%2232%22%20height%3D%2220%22%20rx%3D%224%22/%3E%3Cline%20x1%3D%2214%22%20y1%3D%2216%22%20x2%3D%2234%22%20y2%3D%2216%22%20stroke-width%3D%221.5%22/%3E%3C/g%3E%0A%3C/svg%3E");
+  background-repeat: repeat;
+  color: #1d1d1f;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* Футер в правом нижнем углу */
+body::after {
+  content: "специально для магазина Weissgauff";
+  position: fixed;
+  bottom: 15px;
+  right: 20px;
+  font-size: 0.75em;
+  color: #86868b;
+  opacity: 0.7;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  pointer-events: none;
 }
 
 .container {
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 40px 20px;
+  max-width: 1600px; /* Увеличена ширина, чтобы 4 плашки в ряд помещались комфортно */
+  margin: 0 auto;
+  padding: 40px 20px;
 }
 
 .header {
-    text-align: center;
-    margin-bottom: 40px;
+  text-align: center;
+  margin-bottom: 40px;
 }
 
 .header h1 {
-    font-size: 2.5em;
-    margin-bottom: 10px;
+  font-size: 2.5em;
+  margin-bottom: 10px;
 }
 
 .subtitle {
-    color: #86868b;
-    font-size: 1.1em;
+  color: #86868b;
+  font-size: 1.1em;
 }
 
 .search-box {
-    margin-bottom: 40px;
+  margin-bottom: 40px;
 }
 
 #searchInput {
-    width: 100%;
-    padding: 18px 25px;
-    font-size: 1.05em;
-    border: 2px solid #E6E6FA;
-    border-radius: 16px;
-    outline: none;
-    background: white;
-    transition: all 0.3s;
+  width: 100%;
+  padding: 18px 25px;
+  font-size: 1.05em;
+  border: 2px solid #E6E6FA;
+  border-radius: 16px;
+  outline: none;
+  background: white;
+  transition: all 0.3s;
 }
 
 #searchInput:focus {
-    border-color: #D8BFD8;
-    box-shadow: 0 2px 12px rgba(216, 191, 216, 0.3);
+  border-color: #D8BFD8;
+  box-shadow: 0 2px 12px rgba(216, 191, 216, 0.3);
 }
 
+/* Строго в одну линию (4 колонки) */
 .stores-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 20px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 25px;
+  grid-auto-rows: 1fr; /* Гарантирует одинаковую высоту всех строк */
 }
 
+/* Одинаковый размер, увеличенная высота */
 .store-card {
-    background: #E6E6FA;
-    border-radius: 16px;
-    padding: 30px 20px;
-    cursor: pointer;
-    transition: all 0.3s;
-    min-height: 120px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    text-align: center;
+  background: #E6E6FA;
+  border-radius: 16px;
+  padding: 30px 25px;
+  cursor: pointer;
+  transition: all 0.3s;
+  min-height: 450px; /* Значительно увеличенная минимальная высота */
+  height: 100%; /* Растягивается на всю высоту ячейки грида */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  text-align: center;
 }
 
 .store-card h3 {
-    font-size: 1.3em;
-    color: #1d1d1f;
+  font-size: 1.6em; /* Крупнее */
+  font-weight: 800; /* Жирнее */
+  color: #1d1d1f;
+  margin-bottom: 15px;
 }
 
 .store-card p {
-    color: #1d1d1f;
-    font-size: 0.9em;
-    margin-top: 10px;
+  color: #1d1d1f;
+  font-size: 1.05em;
+  font-weight: 600;
+  margin-top: 10px;
 }
 
 .store-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 8px 24px rgba(216, 191, 216, 0.4);
-    background: #D8BFD8;
+  transform: translateY(-5px);
+  box-shadow: 0 8px 24px rgba(216, 191, 216, 0.4);
+  background: #D8BFD8;
 }
 
+/* Все сверки открыты, без скрытия и скролла */
 .store-items {
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.4s ease-out, opacity 0.3s;
-    opacity: 0;
-    margin-top: 0;
-    width: 100%;
-}
-
-.store-card:hover .store-items {
-    max-height: 500px;
-    opacity: 1;
-    margin-top: 15px;
+  width: 100%;
+  margin-top: 20px;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
 }
 
 .store-items ul {
-    list-style: none;
-    padding: 0;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  width: 100%;
 }
 
 .store-items li {
-    padding: 12px 15px;
-    background: rgba(255, 255, 255, 0.7);
-    margin-bottom: 8px;
-    border-radius: 10px;
-    cursor: pointer;
-    transition: all 0.2s;
-    color: #1d1d1f;
-    font-size: 0.95em;
-    text-align: left;
+  padding: 16px 20px;
+  background: rgba(255, 255, 255, 0.7);
+  margin-bottom: 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #1d1d1f;
+  font-size: 1.15em; /* Крупнее */
+  font-weight: 600; /* Жирнее */
+  text-align: left;
 }
 
+/* При наведении на сверку она меняет цвет */
 .store-items li:hover {
-    background: white;
-    transform: translateX(5px);
+  background: #C9A9C9;
+  color: #ffffff;
+  transform: translateX(5px);
 }
 
 /* Экраны */
 .screen {
-    background: white;
-    padding: 40px;
-    border-radius: 20px;
-    box-shadow: 0 4px 20px rgba(216, 191, 216, 0.2);
+  background: white;
+  padding: 40px;
+  border-radius: 20px;
+  box-shadow: 0 4px 20px rgba(216, 191, 216, 0.2);
 }
 
 .back-btn {
-    background: #E6E6FA;
-    border: none;
-    padding: 12px 24px;
-    border-radius: 10px;
-    cursor: pointer;
-    font-size: 1em;
-    margin-bottom: 25px;
-    color: #1d1d1f;
-    transition: all 0.2s;
+  background: #E6E6FA;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 1em;
+  margin-bottom: 25px;
+  color: #1d1d1f;
+  transition: all 0.2s;
 }
 
 .back-btn:hover {
-    background: #D8BFD8;
+  background: #D8BFD8;
 }
 
 /* Инструкция */
 .instruction-content h2 {
-    font-size: 2em;
-    margin-bottom: 10px;
+  font-size: 2em;
+  margin-bottom: 10px;
 }
 
 .instruction-content > p {
-    color: #86868b;
-    margin-bottom: 25px;
+  color: #86868b;
+  margin-bottom: 25px;
 }
 
 .instruction-steps ol {
-    padding-left: 25px;
+  padding-left: 25px;
 }
 
 .instruction-steps li {
-    margin-bottom: 15px;
-    font-size: 1.05em;
+  margin-bottom: 15px;
+  font-size: 1.05em;
 }
 
 .message-template {
-    background: #FAF8FF;
-    padding: 25px;
-    border-radius: 14px;
-    margin: 25px 0;
-    border: 2px solid #E6E6FA;
+  background: #FAF8FF;
+  padding: 25px;
+  border-radius: 14px;
+  margin: 25px 0;
+  border: 2px solid #E6E6FA;
 }
 
 .message-template h4 {
-    margin-bottom: 15px;
+  margin-bottom: 15px;
 }
 
 .message-template p {
-    background: white;
-    padding: 18px;
-    border-radius: 10px;
-    font-family: 'Courier New', monospace;
-    white-space: pre-wrap;
-    margin-bottom: 15px;
+  background: white;
+  padding: 18px;
+  border-radius: 10px;
+  font-family: 'Courier New', monospace;
+  white-space: pre-wrap;
+  margin-bottom: 15px;
 }
 
 .copy-btn {
-    background: #D8BFD8;
-    color: #1d1d1f;
-    border: none;
-    padding: 12px 24px;
-    border-radius: 10px;
-    cursor: pointer;
-    font-size: 1em;
+  background: #D8BFD8;
+  color: #1d1d1f;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 1em;
 }
 
 .copy-btn:hover {
-    background: #C9A9C9;
+  background: #C9A9C9;
 }
 
 .hidden {
-    display: none !important;
+  display: none !important;
 }
 
-@media (max-width: 1200px) {
-    .stores-grid { grid-template-columns: repeat(2, 1fr); }
+/* Адаптивность: на экранах меньше 1400px перестраивается в 2 колонки, чтобы не было горизонтального скролла и сжатия */
+@media (max-width: 1400px) {
+  .stores-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
 @media (max-width: 768px) {
-    .header h1 { font-size: 1.8em; }
-    .stores-grid { grid-template-columns: 1fr; }
-    .container { padding: 20px 15px; }
+  .header h1 { font-size: 1.8em; }
+  .stores-grid { grid-template-columns: 1fr; }
+  .container { padding: 20px 15px; }
+  body::after {
+    position: static;
+    text-align: center;
+    padding: 15px 0;
+    opacity: 0.6;
+  }
 }
+
 /* Стили для инструкции по сайту */
 .site-instruction {
-    max-width: 900px;
-    margin: 0 auto;
-    line-height: 1.7;
+  max-width: 900px;
+  margin: 0 auto;
+  line-height: 1.7;
 }
 
 .site-instruction h2 {
-    font-size: 2em;
-    margin-bottom: 25px;
-    color: #1d1d1f;
-    border-bottom: 3px solid #D8BFD8;
-    padding-bottom: 15px;
+  font-size: 2em;
+  margin-bottom: 25px;
+  color: #1d1d1f;
+  border-bottom: 3px solid #D8BFD8;
+  padding-bottom: 15px;
 }
 
 .site-instruction h3 {
-    font-size: 1.5em;
-    margin: 30px 0 15px 0;
-    color: #1d1d1f;
+  font-size: 1.5em;
+  margin: 30px 0 15px 0;
+  color: #1d1d1f;
 }
 
 .site-instruction h4 {
-    font-size: 1.2em;
-    margin: 20px 0 10px 0;
-    color: #1d1d1f;
+  font-size: 1.2em;
+  margin: 20px 0 10px 0;
+  color: #1d1d1f;
 }
 
 .instruction-section {
-    margin-bottom: 25px;
-    padding: 20px;
-    background: #FAF8FF;
-    border-radius: 12px;
-    border: 1px solid #E6E6FA;
+  margin-bottom: 25px;
+  padding: 20px;
+  background: #FAF8FF;
+  border-radius: 12px;
+  border: 1px solid #E6E6FA;
 }
 
 .instruction-section.warning {
-    background: #FFF9E6;
-    border: 2px solid #FFE082;
+  background: #FFF9E6;
+  border: 2px solid #FFE082;
 }
 
 .instruction-section.warning p {
-    font-size: 1.05em;
-    line-height: 1.6;
+  font-size: 1.05em;
+  line-height: 1.6;
 }
 
 .instruction-section ul,
 .instruction-section ol {
-    padding-left: 25px;
-    margin: 10px 0;
+  padding-left: 25px;
+  margin: 10px 0;
 }
 
 .instruction-section li {
-    margin-bottom: 10px;
-    font-size: 1em;
+  margin-bottom: 10px;
+  font-size: 1em;
 }
 
 .sverka-link {
-    color: #005BFF;
-    text-decoration: none;
-    font-weight: 600;
-    padding: 2px 6px;
-    border-radius: 4px;
-    transition: all 0.2s;
+  color: #005BFF;
+  text-decoration: none;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 0.2s;
 }
 
 .sverka-link:hover {
-    background: #E6E6FA;
-    text-decoration: underline;
+  background: #E6E6FA;
+  text-decoration: underline;
 }
 
 .instruction-section.footer {
-    text-align: center;
-    background: #E6E6FA;
-    padding: 25px;
-    margin-top: 30px;
+  text-align: center;
+  background: #E6E6FA;
+  padding: 25px;
+  margin-top: 30px;
 }
 
 .instruction-section.footer p {
-    font-size: 1.2em;
-    margin: 0;
+  font-size: 1.2em;
+  margin: 0;
 }
+
 /* Стили для textarea отмен */
 .cancellations-textarea {
-    width: 100%;
-    min-height: 120px;
-    padding: 12px;
-    border: 2px solid #E6E6FA;
-    border-radius: 8px;
-    font-family: 'Courier New', monospace;
-    font-size: 14px;
-    resize: vertical;
-    margin-top: 8px;
+  width: 100%;
+  min-height: 120px;
+  padding: 12px;
+  border: 2px solid #E6E6FA;
+  border-radius: 8px;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  resize: vertical;
+  margin-top: 8px;
 }
 
 .cancellations-textarea:focus {
-    outline: none;
-    border-color: #005BFF;
+  outline: none;
+  border-color: #005BFF;
 }
 
 /* Предупреждение в инструкции */
 .warning-box {
-    background: #FFF9E6;
-    border: 2px solid #FFE082;
-    border-radius: 8px;
-    padding: 12px;
-    margin-top: 15px;
-    font-size: 0.9em;
+  background: #FFF9E6;
+  border: 2px solid #FFE082;
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 15px;
+  font-size: 0.9em;
 }
 
 /* Название в превью наклеек */
 .sticker-name {
-    display: block;
-    font-size: 0.85em;
-    color: #86868b;
-    margin-top: 4px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 300px;
+  display: block;
+  font-size: 0.85em;
+  color: #86868b;
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 300px;
 }

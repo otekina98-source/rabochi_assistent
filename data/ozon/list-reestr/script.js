@@ -14,6 +14,7 @@ uploadArea.addEventListener('drop', e => {
     const file = e.dataTransfer.files[0];
     if (file && file.type === 'application/pdf') handlePdf(file);
 });
+
 pdfInput.addEventListener('change', e => { if (e.target.files[0]) handlePdf(e.target.files[0]); });
 
 async function handlePdf(file) {
@@ -21,22 +22,39 @@ async function handlePdf(file) {
     const status = document.getElementById('pdfStatus');
     status.textContent = '⏳ Чтение PDF...';
     status.className = 'status';
+    
     try {
         const buffer = await file.arrayBuffer();
         const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
         let text = '';
+        
         for (let i = 1; i <= pdf.numPages; i++) {
             const page = await pdf.getPage(i);
             const content = await page.getTextContent();
             text += content.items.map(it => it.str).join(' ') + '\n';
+            
             status.textContent = `⏳ Страница ${i} из ${pdf.numPages}`;
+            // Отдаем управление браузеру каждые 5 страниц, чтобы не было зависания
+            if (i % 5 === 0) await new Promise(r => setTimeout(r, 0));
         }
-        const pattern = /\b\d{5,10}-\d{3,5}-\d{1,3}\b/g;
+        
+        // 🚀 КРИТИЧЕСКИ ВАЖНО: убираем пробелы вокруг дефисов между цифрами
+        // Превращает "84486774 - 0082 - 1" в "84486774-0082-1"
+        text = text.replace(/(\d)\s+[-–—]\s+(\d)/g, '$1-$2');
+        text = text.replace(/(\d)\s+[-–—]\s+(\d)/g, '$1-$2'); // Повторяем для надежности
+        
+        // 🚀 ГИБКИЙ ПАТТЕРН: ищем ЛЮБЫЕ номера с двумя дефисами (без жестких ограничений длины)
+        const pattern = /\b\d+[-–—]\d+[-–—]\d+\b/g;
         const matches = text.match(pattern) || [];
-        listNumbers = [...new Set(matches)];
+        
+        // Нормализуем: приводим все типы дефисов к обычному "-" и убираем дубликаты
+        listNumbers = [...new Set(matches.map(n => n.replace(/[–—]/g, '-')))];
+        
         status.textContent = `✅ Найдено ${listNumbers.length} номеров на ${pdf.numPages} стр.`;
         status.className = 'status success';
-        console.log('Найдены номера:', listNumbers.slice(0, 10));
+        console.log('Найдено номеров:', listNumbers.length);
+        console.log('Примеры:', listNumbers.slice(0, 10));
+        
     } catch (err) {
         status.textContent = '❌ Ошибка: ' + err.message;
         status.className = 'status error';
@@ -48,35 +66,43 @@ async function startSverka() {
     const text = document.getElementById('reestrText').value.trim();
     if (!text) { alert('Введите номера из 1С'); return; }
     if (listNumbers.length === 0) { alert('Загрузите Лист отгрузки'); return; }
-
+    
+    // 🚀 Парсим и нормализуем номера из 1С (убираем пробелы, приводим дефисы к одному виду)
     reestrNumbers = [...new Set(
-        text.split('\n')
-            .map(n => n.trim())
+        text.split(/[\r\n]+/)
+            .map(n => n.trim().replace(/\s+/g, '').replace(/[–—]/g, '-'))
             .filter(n => n.length > 0)
     )];
-
+    
     document.getElementById('progressSection').classList.remove('hidden');
     document.getElementById('resultsSection').classList.add('hidden');
     document.getElementById('startBtn').disabled = true;
-
-    const all = new Set([...listNumbers, ...reestrNumbers]);
+    
+    // 🚀 ОПТИМИЗАЦИЯ: используем Set для мгновенного поиска O(1) вместо медленного .includes() O(N)
+    const listSet = new Set(listNumbers);
+    const reestrSet = new Set(reestrNumbers);
+    const all = new Set([...listSet, ...reestrSet]);
     const total = all.size;
     let done = 0;
     results = [];
-
+    
     for (const num of all) {
-        const inList = listNumbers.includes(num);
-        const inReestr = reestrNumbers.includes(num);
+        const inList = listSet.has(num);
+        const inReestr = reestrSet.has(num);
         results.push({ number: num, inList, inReestr });
         done++;
-        const pct = Math.round((done / total) * 100);
-        document.getElementById('progressFill').style.width = pct + '%';
-        document.getElementById('progressPercent').textContent = pct + '%';
-        document.getElementById('progressDetails').textContent =
-            `Обработано ${done}/${total} | Лист: ${listNumbers.length} | 1С: ${reestrNumbers.length}`;
-        if (done % 10 === 0) await new Promise(r => setTimeout(r, 10));
+        
+        // Обновляем прогресс-бар каждые 50 шагов, чтобы не тормозить браузер
+        if (done % 50 === 0 || done === total) {
+            const pct = Math.round((done / total) * 100);
+            document.getElementById('progressFill').style.width = pct + '%';
+            document.getElementById('progressPercent').textContent = pct + '%';
+            document.getElementById('progressDetails').textContent = 
+                `Обработано ${done}/${total} | Лист: ${listNumbers.length} | 1С: ${reestrNumbers.length}`;
+            await new Promise(r => setTimeout(r, 0));
+        }
     }
-
+    
     showResults();
     document.getElementById('startBtn').disabled = false;
 }
@@ -86,7 +112,7 @@ function showResults() {
     const onlyList = results.filter(r => r.inList && !r.inReestr).length;
     const onlyReestr = results.filter(r => !r.inList && r.inReestr).length;
     const totalDiff = onlyList + onlyReestr;
-
+    
     document.getElementById('summary').innerHTML = `
         <div class="summary-card miss">
             <span class="num">${totalDiff}</span>
@@ -101,8 +127,9 @@ function showResults() {
             <div class="lbl">Только в 1С</div>
         </div>
     `;
-
+    
     const diff = results.filter(r => !(r.inList && r.inReestr));
+    
     if (diff.length === 0) {
         document.getElementById('resultsBody').innerHTML = `
             <tr><td colspan="4" style="text-align:center; padding:30px; color:#28a745; font-family:-apple-system, sans-serif;">
@@ -115,6 +142,7 @@ function showResults() {
             if (!a.inList && b.inList) return 1;
             return 0;
         });
+        
         document.getElementById('resultsBody').innerHTML = sorted.map(r => {
             let badge;
             if (r.inList && !r.inReestr) badge = '⚠️ Только в листе';
@@ -127,10 +155,11 @@ function showResults() {
             </tr>`;
         }).join('');
     }
+    
     document.getElementById('resultsSection').classList.remove('hidden');
 }
 
-// --- НОВОЕ: копирование номеров ---
+// --- Функции копирования и экспорта ---
 function copyNumber(num, el) {
     navigator.clipboard.writeText(num).then(() => {
         el.classList.add('copied');
@@ -149,7 +178,14 @@ function copyAllNumbers() {
 }
 
 function showToast(msg) {
-    const t = document.getElementById('toast');
+    // Создаем toast, если его нет в HTML
+    let t = document.getElementById('toast');
+    if (!t) {
+        t = document.createElement('div');
+        t.id = 'toast';
+        t.className = 'toast';
+        document.body.appendChild(t);
+    }
     t.textContent = msg;
     t.classList.add('show');
     clearTimeout(t._timer);
@@ -162,6 +198,7 @@ function exportCSV() {
         'Номер;В листе;В 1С;Статус',
         ...diff.map(r => `${r.number};${r.inList?'Да':'Нет'};${r.inReestr?'Да':'Нет'};${r.inList?'Только в листе':'Только в 1С'}`)
     ].join('\n');
+    
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
