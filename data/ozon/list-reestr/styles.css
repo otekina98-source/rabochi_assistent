@@ -217,4 +217,34 @@ background: #1d1d1f; color: #fff; padding: 12px 24px; border-radius: 8px;
 font-size: 14px; opacity: 0; transition: all .3s; pointer-events: none; z-index: 1000;
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.num-copy {
+    cursor: pointer;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-family: 'Courier New', monospace;
+    transition: all 0.2s ease;
+    user-select: none;
+    display: inline-block;
+    background: #f3f4f6;
+    color: #1d1d1f;
+    border: 1px solid #e5e7eb;
+}
+
+.num-copy:hover {
+    background: #005BFF;
+    color: #fff;
+    border-color: #005BFF;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 91, 255, 0.3);
+}
+
+.num-copy:active {
+    transform: translateY(0);
+}
+
+.num-copy.copied {
+    background: #10b981;
+    color: #fff;
+    border-color: #10b981;
+    font-weight: 600;
 }
