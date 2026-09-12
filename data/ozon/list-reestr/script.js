@@ -1,6 +1,7 @@
 let listNumbers = [];
 let reestrNumbers = [];
 let results = [];
+let copiedNumbers = new Set(); // Храним скопированные номера
 
 // Drag & drop
 const uploadArea = document.getElementById('pdfUploadArea');
@@ -34,7 +35,7 @@ uploadArea.addEventListener('drop', e => {
         if (isPdfFile(file)) {
             handlePdf(file);
         } else {
-            alert('⚠️ Пожалуйста, выберите PDF файл. Получен файл: ' + file.name);
+            alert('️ Пожалуйста, выберите PDF файл. Получен файл: ' + file.name);
         }
     }
 });
@@ -46,7 +47,7 @@ pdfInput.addEventListener('change', e => {
         if (isPdfFile(file)) {
             handlePdf(file);
         } else {
-            alert('⚠️ Пожалуйста, выберите PDF файл. Получен файл: ' + file.name);
+            alert('️ Пожалуйста, выберите PDF файл. Получен файл: ' + file.name);
         }
     }
 });
@@ -81,35 +82,28 @@ function pluralize(n, one, two, five) {
 }
 
 /**
- * Нормализация номера заказа: отбрасываем слипшийся порядковый номер ЛП
+ * Нормализация номера заказа
  * Формат: цифры(8-14)-цифры(4)-цифры(1-2)[-доп]
+ * Для листа отгрузки слипшихся номеров нет, но оставляем нормализацию
  */
 function normalizeOrderNumber(num) {
     if (!num) return null;
-
     // Убираем пробелы, заменяем тире
     num = num.trim().replace(/\s+/g, '').replace(/[–—]/g, '-');
-
     // Разбиваем по дефису
     const parts = num.split('-');
     if (parts.length < 3) return null;
-
     // Если первая группа длиннее 14 цифр — отбрасываем лишние слева
-    // (предполагаем, что порядковый номер ЛП имеет 1-6 цифр)
     while (parts[0].length > 14) {
         parts[0] = parts[0].slice(1);
     }
-
     // Если первая группа короче 8 цифр — это не номер заказа
     if (parts[0].length < 8) return null;
-
     // Вторая группа должна быть ровно 4 цифры
     if (parts[1].length !== 4) return null;
-
     // Третья группа 1-2 цифры
     if (parts[2].length < 1 || parts[2].length > 2) return null;
-
-    // Возвращаем нормализованный номер (без 4-й группы если есть)
+    // Возвращаем нормализованный номер
     return parts.slice(0, 3).join('-');
 }
 
@@ -120,22 +114,19 @@ async function handlePdf(file) {
     const status = document.getElementById('pdfStatus');
     status.textContent = '⏳ Чтение PDF...';
     status.className = 'status';
-
     try {
         const buffer = await file.arrayBuffer();
         console.log('📦 Буфер получен, размер:', buffer.byteLength);
         const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
         console.log('📑 PDF загружен, страниц:', pdf.numPages);
-
         let text = '';
         for (let i = 1; i <= pdf.numPages; i++) {
             const page = await pdf.getPage(i);
             const content = await page.getTextContent();
             text += content.items.map(it => it.str).join(' ') + '\n';
-            status.textContent = ` Страница ${i} из ${pdf.numPages}`;
+            status.textContent = `📄 Страница ${i} из ${pdf.numPages}`;
             if (i % 5 === 0) await new Promise(r => setTimeout(r, 0));
         }
-
         console.log('Текст извлечён, длина:', text.length);
 
         // Убираем пробелы вокруг дефисов между цифрами
@@ -146,7 +137,7 @@ async function handlePdf(file) {
         const pattern = /\d+[-–—]\d+[-–—]\d+(?:[-–—]\d+)?/g;
         const rawMatches = text.match(pattern) || [];
 
-        // Нормализуем каждый найденный номер — отбрасываем слипшиеся порядковые номера
+        // Нормализуем каждый найденный номер
         const normalizedSet = new Set();
         for (const raw of rawMatches) {
             const normalized = normalizeOrderNumber(raw);
@@ -162,7 +153,7 @@ async function handlePdf(file) {
         console.log('Примеры:', listNumbers.slice(0, 10));
 
         if (listNumbers.length === 0) {
-            alert('️ Номера не найдены! Проверьте консоль браузера (F12).');
+            alert('⚠️ Номера не найдены! Проверьте консоль браузера (F12).');
         }
     } catch (err) {
         console.error('❌ Ошибка обработки PDF:', err);
@@ -175,7 +166,7 @@ async function handlePdf(file) {
 async function startSverka() {
     const text = document.getElementById('reestrText').value.trim();
     if (!text) { alert('Введите номера из 1С'); return; }
-    if (listNumbers.length === 0) { alert('Загрузите Лист подбора'); return; }
+    if (listNumbers.length === 0) { alert('Загрузите Лист отгрузки'); return; }
 
     // Парсим реестр 1С с нормализацией
     const rawLines = text.split(/[\r\n]+/);
@@ -199,22 +190,22 @@ async function startSverka() {
     document.getElementById('resultsSection').classList.add('hidden');
     document.getElementById('startBtn').disabled = true;
     results = [];
+    copiedNumbers.clear(); // Сбрасываем скопированные номера
 
     // Создаём Set для быстрого поиска O(1)
     const reestrSetLookup = new Set(reestrNumbers);
     const listSetLookup = new Set(listNumbers);
-
     const total = listNumbers.length + reestrNumbers.length;
     let done = 0;
 
-    // Находим номера, которые есть в ЛП но нет в 1С
+    // Находим номера, которые есть в Листе отгрузки но нет в 1С
     for (const listNum of listNumbers) {
         if (!reestrSetLookup.has(listNum)) {
             results.push({
                 number: listNum,
                 inList: true,
                 inReestr: false,
-                status: 'Есть в ЛП, нет в 1С'
+                status: 'Есть в Листе отгрузки, нет в 1С'
             });
         }
         done++;
@@ -227,14 +218,14 @@ async function startSverka() {
         }
     }
 
-    // Находим номера, которые есть в 1С но нет в ЛП
+    // Находим номера, которые есть в 1С но нет в Листе отгрузки
     for (const reestrNum of reestrNumbers) {
         if (!listSetLookup.has(reestrNum)) {
             results.push({
                 number: reestrNum,
                 inList: false,
                 inReestr: true,
-                status: 'Есть в 1С, нет в ЛП'
+                status: 'Есть в 1С, нет в Листе отгрузки'
             });
         }
         done++;
@@ -264,11 +255,11 @@ function showResults() {
         </div>
         <div class="summary-card miss">
             <span class="num">${onlyReestr}</span>
-            <div class="lbl">Есть в 1С, нет в ЛП</div>
+            <div class="lbl">Есть в 1С, нет в Листе отгрузки</div>
         </div>
         <div class="summary-card miss">
             <span class="num">${onlyList}</span>
-            <div class="lbl">Есть в ЛП, нет в 1С</div>
+            <div class="lbl">Есть в Листе отгрузки, нет в 1С</div>
         </div>
     `;
 
@@ -287,8 +278,9 @@ function showResults() {
         });
         body.innerHTML = sorted.map(r => {
             const badgeClass = r.inReestr ? 'miss-reestr' : 'miss-list';
+            const isCopied = copiedNumbers.has(r.number) ? 'copied-persistent' : '';
             return `<tr>
-                <td><span class="num-copy" title="Нажмите, чтобы скопировать" onclick="copyNumber('${r.number}', this)">${r.number}</span></td>
+                <td><span class="num-copy ${isCopied}" title="Нажмите, чтобы скопировать" onclick="copyNumber('${r.number}', this)">${r.number}</span></td>
                 <td>${r.inList ? '✅' : '❌'}</td>
                 <td>${r.inReestr ? '✅' : '❌'}</td>
                 <td><span class="badge ${badgeClass}">${r.status}</span></td>
@@ -306,29 +298,24 @@ async function copyNumber(num, el) {
         } else {
             fallbackCopyTextToClipboard(num);
         }
+
+        // Добавляем в множество скопированных
+        copiedNumbers.add(num);
+
         if (el) {
-            const originalText = el.textContent;
-            el.textContent = '✓ Скопировано';
-            el.classList.add('copied');
-            setTimeout(() => {
-                el.textContent = originalText;
-                el.classList.remove('copied');
-            }, 2000);
+            el.classList.add('copied-persistent');
         }
+
         showToast('📋 Номер скопирован: ' + num);
     } catch (err) {
         console.error('Ошибка копирования:', err);
         try {
             fallbackCopyTextToClipboard(num);
+            copiedNumbers.add(num);
             if (el) {
-                el.textContent = '✓ Скопировано';
-                el.classList.add('copied');
-                setTimeout(() => {
-                    el.textContent = num;
-                    el.classList.remove('copied');
-                }, 2000);
+                el.classList.add('copied-persistent');
             }
-            showToast('📋 Номер скопирован: ' + num);
+            showToast(' Номер скопирован: ' + num);
         } catch (fallbackErr) {
             showToast('❌ Не удалось скопировать');
             console.error('Fallback также не сработал:', fallbackErr);
@@ -370,15 +357,29 @@ function copyAllNumbers() {
     const text = results.map(r => r.number).join('\n');
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(() => {
+            // Помечаем все как скопированные
+            results.forEach(r => copiedNumbers.add(r.number));
+            // Обновляем отображение
+            document.querySelectorAll('.num-copy').forEach(el => {
+                el.classList.add('copied-persistent');
+            });
             showToast('📋 Скопировано ' + results.length + ' ' + pluralize(results.length, 'номер', 'номера', 'номеров'));
         }).catch(err => {
             console.error('Ошибка копирования:', err);
             fallbackCopyTextToClipboard(text);
+            results.forEach(r => copiedNumbers.add(r.number));
+            document.querySelectorAll('.num-copy').forEach(el => {
+                el.classList.add('copied-persistent');
+            });
             showToast('📋 Скопировано ' + results.length + ' ' + pluralize(results.length, 'номер', 'номера', 'номеров'));
         });
     } else {
         fallbackCopyTextToClipboard(text);
-        showToast(' Скопировано ' + results.length + ' ' + pluralize(results.length, 'номер', 'номера', 'номеров'));
+        results.forEach(r => copiedNumbers.add(r.number));
+        document.querySelectorAll('.num-copy').forEach(el => {
+            el.classList.add('copied-persistent');
+        });
+        showToast('📋 Скопировано ' + results.length + ' ' + pluralize(results.length, 'номер', 'номера', 'номеров'));
     }
 }
 
@@ -399,7 +400,7 @@ function showToast(msg) {
 function exportCSV() {
     if (results.length === 0) { showToast('Нет данных для экспорта'); return; }
     const csv = [
-        'Номер;В 1С;В ЛП;Статус',
+        'Номер;В 1С;В Листе отгрузки;Статус',
         ...results.map(r =>
             `${r.number};${r.inReestr ? 'Да' : 'Нет'};${r.inList ? 'Да' : 'Нет'};${r.status}`
         )

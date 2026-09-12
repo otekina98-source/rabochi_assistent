@@ -84,7 +84,67 @@ body {
     font-weight: 700;
     font-size: 0.85em;
 }
+.step-text {
+    flex: 1;
+    word-wrap: break-word;
+}
 .instruction-steps li strong { color: #1d1d1f; }
+
+/* Баннер внутри инструкции */
+.banner-inline {
+    background: #B8D4E8;
+    color: #0a2540;
+    padding: 16px 20px;
+    border-radius: 10px;
+    text-align: center;
+    font-size: 1.05em;
+    font-weight: 800;
+    margin-bottom: 20px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    line-height: 1.4;
+    border: 2px solid #8BB8D4;
+}
+.banner-inline strong {
+    font-weight: 900;
+    color: #051d35;
+}
+
+/* Баннер предупреждения */
+.warning-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: #B8D4E8;
+    border: 2px solid #8BB8D4;
+    border-radius: 12px;
+    padding: 16px;
+    margin-top: 20px;
+    font-size: 0.92em;
+    line-height: 1.5;
+    color: #0a2540;
+    font-weight: 600;
+}
+.warning-icon {
+    font-size: 1.6em;
+    flex-shrink: 0;
+}
+.warning-content {
+    flex: 1;
+    font-weight: 600;
+}
+.warning-content strong {
+    display: block;
+    margin-bottom: 6px;
+    color: #051d35;
+    font-size: 1.1em;
+    font-weight: 800;
+}
+.warning-content p {
+    margin: 0;
+    font-weight: 600;
+}
+
 .upload-area {
     border: 2px dashed #A8C8FF;
     border-radius: 12px;
@@ -183,6 +243,11 @@ tbody tr:hover { background: #FAF8FF; }
 .badge.miss { background: #f8d7da; color: #721c24; }
 .badge.miss-reestr { background: #f8d7da; color: #721c24; }
 .badge.miss-list { background: #fff3cd; color: #856404; }
+.export-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
 .export-btn {
     background: #E6E6FA;
     color: #1d1d1f;
@@ -194,7 +259,6 @@ tbody tr:hover { background: #FAF8FF; }
 }
 .export-btn:hover { background: #D8BFD8; }
 .hidden { display: none !important; }
-
 .num-copy {
     cursor: pointer;
     padding: 4px 10px;
@@ -223,7 +287,16 @@ tbody tr:hover { background: #FAF8FF; }
     border-color: #10b981;
     font-weight: 600;
 }
-
+.num-copy.copied-persistent {
+    background: #10b981 !important;
+    color: #fff !important;
+    border-color: #10b981 !important;
+    font-weight: 600;
+}
+.num-copy.copied-persistent:hover {
+    background: #059669 !important;
+    border-color: #059669 !important;
+}
 .toast {
     position: fixed;
     bottom: 30px;
@@ -243,7 +316,6 @@ tbody tr:hover { background: #FAF8FF; }
     opacity: 1;
     transform: translateX(-50%) translateY(0);
 }
-
 @media (max-width: 1000px) {
     .sverka-layout { grid-template-columns: 1fr; }
     .panel { min-height: auto; }

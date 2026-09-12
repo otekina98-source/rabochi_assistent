@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Сверка ЛП и реестр</title>
+    <title>Сверка Лист отгрузки и реестр</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
@@ -12,8 +12,8 @@
         <button class="back-btn" onclick="window.location.href='index.html'">← В меню</button>
         
         <div class="sverka-header">
-            <h2>Сверка ЛП и реестр</h2>
-            <p class="subtitle">Сравнение номеров заказов между 1С и ЛП • ОЗОН ДМД</p>
+            <h2>Сверка Лист отгрузки и реестр</h2>
+            <p class="subtitle">Сравнение номеров заказов между 1С и Листом отгрузки • ОЗОН ДМД</p>
         </div>
 
         <div class="sverka-layout">
@@ -22,30 +22,40 @@
                     <h3>📖 Как пользоваться сверкой</h3>
                 </div>
                 <div class="panel-body">
+                    <!-- Баннер перед инструкцией -->
+                    <div class="banner-inline">
+                        <strong>СКАЧИВАЙТЕ ЛИСТ ОТГРУЗКИ И СВЕРЯЙТЕ ПО НЕМУ</strong>
+                    </div>
+
                     <ol class="instruction-steps">
-                        <li><span class="step-num">1</span><span>Сформируйте отгрузку в ЛК Ozon.</span></li>
-                        <li><span class="step-num">2</span><span>Скачайте ЛП после формирования отгрузки.</span></li>
-                        <li><span class="step-num">3</span><span>Загрузите скачанный ЛП в поле «Лист подбора».</span></li>
-                        <li><span class="step-num">4</span><span>Вставьте номера заказов из 1С из столбика «Телефон 1» в поле «Номера заказов из 1С».</span></li>
-                        <li><span class="step-num">5</span><span>Нажмите «Начать сверку».</span></li>
-                        <li><span class="step-num">6</span><span>Дождитесь окончания обработки и ознакомьтесь с результатами ниже.</span></li>
+                        <li><span class="step-num">1</span> <div class="step-text">Сформируйте отгрузку в ЛК Ozon.</div></li>
+                        <li><span class="step-num">2</span> <div class="step-text">Скачайте <strong>Лист отгрузки</strong> после формирования отгрузки.</div></li>
+                        <li><span class="step-num">3</span> <div class="step-text">Загрузите скачанный <strong>Лист отгрузки</strong> в поле «Лист отгрузки».</div></li>
+                        <li><span class="step-num">4</span> <div class="step-text">Вставьте номера заказов из 1С из столбика «Телефон 1» в поле «Номера заказов из 1С».</div></li>
+                        <li><span class="step-num">5</span> <div class="step-text">Нажмите «Начать сверку».</div></li>
+                        <li><span class="step-num">6</span> <div class="step-text">Дождитесь окончания обработки и ознакомьтесь с результатами ниже.</div></li>
                     </ol>
-                    <div style="margin-top: 20px; padding: 12px; background: #fff3cd; border-radius: 8px; font-size: 0.85em; color: #856404;">
-                        ⚠️ <strong>Предупреждение</strong><br>
-                        Возникают сложности с обработкой заказов от 1000 и более.<br>
-                        В таких случаях просьба пользоваться сверкой, которая находится в папке ОЗОН ДМД и называется «Ozon сверка».
+
+                    <!-- Предупреждение вынесено отдельно -->
+                    <div class="warning-banner">
+                        <div class="warning-icon">⚠️</div>
+                        <div class="warning-content">
+                            <strong>Предупреждение</strong>
+                            <p>Возникают сложности с обработкой заказов от 1000 и более.<br>
+                            В таких случаях просьба пользоваться сверкой, которая находится в папке ОЗОН ДМД и называется «Ozon сверка».</p>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <div class="panel">
                 <div class="panel-header">
-                    <h3>📄 Лист подбора (PDF)</h3>
+                    <h3>📄 Лист отгрузки (PDF)</h3>
                 </div>
                 <div class="panel-body">
                     <div class="upload-area" id="pdfUploadArea">
-                        <input type="file" id="pdfFileInput" accept=".pdf" style="display: none;">
-                        <button class="upload-btn">️ Выбрать PDF</button>
+                        <input type="file" id="pdfFileInput" accept=".pdf" style="display:none">
+                        <button class="upload-btn">📎 Выбрать PDF</button>
                         <p class="hint">или перетащите файл сюда</p>
                         <p class="file-name" id="pdfFileName"></p>
                         <p class="status" id="pdfStatus"></p>
@@ -55,12 +65,12 @@
 
             <div class="panel">
                 <div class="panel-header">
-                    <h3> Номера заказов из 1С</h3>
+                    <h3>📋 Номера заказов из 1С</h3>
                 </div>
                 <div class="panel-body">
-                    <p class="hint" style="margin-bottom: 10px;">Столбик «Телефон 1»</p>
-                    <textarea id="reestrText" placeholder="Вставьте номера заказов здесь..."></textarea>
-                    <p class="hint" id="reestrCounter">0 номеров</p>
+                    <p class="hint">Столбик «Телефон 1»</p>
+                    <textarea id="reestrText" placeholder="Вставьте номера заказов..."></textarea>
+                    <p class="status" id="reestrCounter">0 номеров</p>
                 </div>
             </div>
         </div>
@@ -75,20 +85,18 @@
             <div class="progress-bar">
                 <div class="progress-fill" id="progressFill"></div>
             </div>
-            <p class="progress-details" id="progressDetails"></p>
+            <div class="progress-details" id="progressDetails"></div>
         </div>
 
         <div class="results-section hidden" id="resultsSection">
-            <h3>📊 Расхождения</h3>
-            
+            <h3> Расхождения</h3>
             <div class="summary" id="summary"></div>
-
             <div class="table-wrapper">
                 <table>
                     <thead>
                         <tr>
                             <th>Номер заказа</th>
-                            <th>В ЛП</th>
+                            <th>В Листе отгрузки</th>
                             <th>В 1С</th>
                             <th>Статус</th>
                         </tr>
@@ -96,10 +104,9 @@
                     <tbody id="resultsBody"></tbody>
                 </table>
             </div>
-
-            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <button class="export-btn" onclick="copyAllNumbers()">📋 Скопировать все</button>
-                <button class="export-btn" onclick="exportCSV()"> Скачать CSV</button>
+            <div class="export-actions">
+                <button class="export-btn" onclick="copyAllNumbers()"> Скопировать все</button>
+                <button class="export-btn" onclick="exportCSV()">📄 Скачать CSV</button>
             </div>
         </div>
     </div>
