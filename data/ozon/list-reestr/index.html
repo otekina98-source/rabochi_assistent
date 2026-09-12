@@ -1,109 +1,109 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Сверка лист подбора (отгрузки) и реестр</title>
-<link rel="stylesheet" href="styles.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Сверка ЛП и реестр</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 <body>
+    <div class="container">
+        <button class="back-btn" onclick="window.location.href='index.html'">← В меню</button>
+        
+        <div class="sverka-header">
+            <h2>Сверка ЛП и реестр</h2>
+            <p class="subtitle">Сравнение номеров заказов между 1С и ЛП • ОЗОН ДМД</p>
+        </div>
 
-<div class="container">
-    <button class="back-btn" onclick="history.back()">← В меню</button>
-
-    <header class="sverka-header">
-        <h2>Сверка лист подбора (отгрузки) и реестр</h2>
-        <p class="subtitle">Сравнение номеров заказов между 1С и листом отгрузки • ОЗОН</p>
-    </header>
-
-    <div class="sverka-layout">
-        <!-- Инструкция -->
-        <div class="panel instruction-panel">
-            <div class="panel-header">
-                <h3> Как пользоваться сверкой</h3>
+        <div class="sverka-layout">
+            <div class="panel instruction-panel">
+                <div class="panel-header">
+                    <h3>📖 Как пользоваться сверкой</h3>
+                </div>
+                <div class="panel-body">
+                    <ol class="instruction-steps">
+                        <li><span class="step-num">1</span><span>Сформируйте отгрузку в ЛК Ozon.</span></li>
+                        <li><span class="step-num">2</span><span>Скачайте ЛП после формирования отгрузки.</span></li>
+                        <li><span class="step-num">3</span><span>Загрузите скачанный ЛП в поле «Лист подбора».</span></li>
+                        <li><span class="step-num">4</span><span>Вставьте номера заказов из 1С из столбика «Телефон 1» в поле «Номера заказов из 1С».</span></li>
+                        <li><span class="step-num">5</span><span>Нажмите «Начать сверку».</span></li>
+                        <li><span class="step-num">6</span><span>Дождитесь окончания обработки и ознакомьтесь с результатами ниже.</span></li>
+                    </ol>
+                    <div style="margin-top: 20px; padding: 12px; background: #fff3cd; border-radius: 8px; font-size: 0.85em; color: #856404;">
+                        ⚠️ <strong>Предупреждение</strong><br>
+                        Возникают сложности с обработкой заказов от 1000 и более.<br>
+                        В таких случаях просьба пользоваться сверкой, которая находится в папке ОЗОН ДМД и называется «Ozon сверка».
+                    </div>
+                </div>
             </div>
-            <div class="panel-body">
-                <ol class="instruction-steps">
-                    <li><span class="step-num">1</span><span>Сформируйте отгрузку в ЛК Ozon.</span></li>
-                    <li><span class="step-num">2</span><span>Скачайте лист подбора после формирования отгрузки.</span></li>
-                    <li><span class="step-num">3</span><span>Загрузите скачанный лист подбора в поле «Лист отгрузки».</span></li>
-                    <li><span class="step-num">4</span><span>Вставьте номера заказов из 1С из столбика «Телефон 1» в поле «Номера заказов из 1С».</span></li>
-                    <li><span class="step-num">5</span><span>Нажмите «Начать сверку».</span></li>
-                    <li><span class="step-num">6</span><span>Дождитесь окончания обработки и ознакомьтесь с результатами ниже.</span></li>
-                </ol>
-                <div class="warning">
-                    <div class="warning-title">⚠️ Предупреждение</div>
-                    <p>Возникают сложности с обработкой заказов от <strong>1000 и более</strong>.</p>
-                    <p>В таких случаях просьба пользоваться сверкой, которая находится в папке <em>Ozon DMD</em> и называется <em>«Ozon сверка»</em>.</p>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <h3>📄 Лист подбора (PDF)</h3>
+                </div>
+                <div class="panel-body">
+                    <div class="upload-area" id="pdfUploadArea">
+                        <input type="file" id="pdfFileInput" accept=".pdf" style="display: none;">
+                        <button class="upload-btn">️ Выбрать PDF</button>
+                        <p class="hint">или перетащите файл сюда</p>
+                        <p class="file-name" id="pdfFileName"></p>
+                        <p class="status" id="pdfStatus"></p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <h3> Номера заказов из 1С</h3>
+                </div>
+                <div class="panel-body">
+                    <p class="hint" style="margin-bottom: 10px;">Столбик «Телефон 1»</p>
+                    <textarea id="reestrText" placeholder="Вставьте номера заказов здесь..."></textarea>
+                    <p class="hint" id="reestrCounter">0 номеров</p>
                 </div>
             </div>
         </div>
 
-        <!-- Лист отгрузки -->
-        <div class="panel">
-            <div class="panel-header">
-                <h3>📄 Лист отгрузки (PDF)</h3>
+        <button class="start-btn" id="startBtn" onclick="startSverka()">▶️ НАЧАТЬ СВЕРКУ</button>
+
+        <div class="progress-section hidden" id="progressSection">
+            <div class="progress-stats">
+                <span id="progressPercent">0%</span>
+                <span>Обработка...</span>
             </div>
-            <div class="panel-body">
-                <div class="upload-area" id="pdfUploadArea">
-                    <button class="upload-btn" onclick="document.getElementById('pdfFileInput').click()">⬆️ Выбрать PDF</button>
-                    <div class="hint">или перетащите файл сюда</div>
-                    <input type="file" id="pdfFileInput" accept="application/pdf" style="display:none">
-                    <div class="file-name" id="pdfFileName"></div>
-                    <div class="status" id="pdfStatus"></div>
-                </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
             </div>
+            <p class="progress-details" id="progressDetails"></p>
         </div>
 
-        <!-- Номера из 1С -->
-        <div class="panel">
-            <div class="panel-header">
-                <h3> Номера заказов из 1С</h3>
-                <p class="panel-hint">Столбик «Телефон 1»</code></p>
+        <div class="results-section hidden" id="resultsSection">
+            <h3>📊 Расхождения</h3>
+            
+            <div class="summary" id="summary"></div>
+
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Номер заказа</th>
+                            <th>В ЛП</th>
+                            <th>В 1С</th>
+                            <th>Статус</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsBody"></tbody>
+                </table>
             </div>
-            <div class="panel-body">
-                <textarea id="reestrText" placeholder="Вставьте номера заказов (каждый с новой строки)&#10;52645843-0182-1&#10;93498332-0039-1&#10;68007217-0004-1"></textarea>
-                <div class="counter" id="reestrCounter">0 номеров</div>
+
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button class="export-btn" onclick="copyAllNumbers()">📋 Скопировать все</button>
+                <button class="export-btn" onclick="exportCSV()"> Скачать CSV</button>
             </div>
         </div>
     </div>
 
-    <button class="start-btn" id="startBtn" onclick="startSverka()">▶️ НАЧАТЬ СВЕРКУ</button>
-
-    <section class="progress-section hidden" id="progressSection">
-        <div class="progress-stats">
-            <span id="progressPercent">0%</span>
-            <span id="progressDetails">Обработка...</span>
-        </div>
-        <div class="progress-bar">
-            <div class="progress-fill" id="progressFill"></div>
-        </div>
-    </section>
-
-    <section class="results-section hidden" id="resultsSection">
-        <h3>📊 Расхождения</h3>
-        <div class="summary" id="summary"></div>
-        <div class="table-wrapper">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Номер заказа</th>
-                        <th>В листе</th>
-                        <th>В 1С</th>
-                        <th>Статус</th>
-                    </tr>
-                </thead>
-                <tbody id="resultsBody"></tbody>
-            </table>
-        </div>
-        <div class="export-actions">
-            <button class="export-btn primary" onclick="copyAllNumbers()">📋 Скопировать все</button>
-            <button class="export-btn" onclick="exportCSV()">📥 Скачать CSV</button>
-        </div>
-    </section>
-</div>
-
-<script src="script.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>

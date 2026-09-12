@@ -6,9 +6,7 @@ let results = [];
 const uploadArea = document.getElementById('pdfUploadArea');
 const pdfInput = document.getElementById('pdfFileInput');
 
-// 🚀 КЛИК ПО ОБЛАСТИ — открывает выбор файла
 uploadArea.addEventListener('click', (e) => {
-    // Не срабатывает, если кликнули по кнопке
     if (e.target.closest('.upload-btn')) return;
     pdfInput.click();
 });
@@ -29,17 +27,14 @@ uploadArea.addEventListener('drop', e => {
     e.preventDefault();
     e.stopPropagation();
     uploadArea.classList.remove('dragover');
-    
     const files = e.dataTransfer.files;
     console.log('Drop files:', files);
-    
     if (files.length > 0) {
         const file = files[0];
-        // 🚀 ГИБКАЯ ПРОВЕРКА: по MIME-типу ИЛИ по расширению
         if (isPdfFile(file)) {
             handlePdf(file);
         } else {
-            alert('️ Пожалуйста, выберите PDF файл. Получен файл: ' + file.name);
+            alert('⚠️ Пожалуйста, выберите PDF файл. Получен файл: ' + file.name);
         }
     }
 });
@@ -56,11 +51,8 @@ pdfInput.addEventListener('change', e => {
     }
 });
 
-// 🚀 УНИВЕРСАЛЬНАЯ ПРОВЕРКА PDF
 function isPdfFile(file) {
-    // Проверяем MIME-тип
     if (file.type === 'application/pdf') return true;
-    // Проверяем расширение (на случай если MIME-тип не определён)
     if (file.name && file.name.toLowerCase().endsWith('.pdf')) return true;
     return false;
 }
@@ -73,9 +65,10 @@ function updateCounter() {
     const nums = reestrText.value
         .split(/[\r\n]+/)
         .map(n => n.trim().replace(/\s+/g, '').replace(/[–—]/g, '-'))
-        .filter(n => /^\d+-\d+-\d+(-\d+)?$/.test(n));
+        .filter(n => /^\d{8,14}-\d{4}-\d{1,2}(?:-\d+)?$/.test(n));
     reestrCounter.textContent = nums.length + ' ' + pluralize(nums.length, 'номер', 'номера', 'номеров');
 }
+
 reestrText.addEventListener('input', updateCounter);
 
 function pluralize(n, one, two, five) {
@@ -87,10 +80,42 @@ function pluralize(n, one, two, five) {
     return five;
 }
 
+/**
+ * Нормализация номера заказа: отбрасываем слипшийся порядковый номер ЛП
+ * Формат: цифры(8-14)-цифры(4)-цифры(1-2)[-доп]
+ */
+function normalizeOrderNumber(num) {
+    if (!num) return null;
+
+    // Убираем пробелы, заменяем тире
+    num = num.trim().replace(/\s+/g, '').replace(/[–—]/g, '-');
+
+    // Разбиваем по дефису
+    const parts = num.split('-');
+    if (parts.length < 3) return null;
+
+    // Если первая группа длиннее 14 цифр — отбрасываем лишние слева
+    // (предполагаем, что порядковый номер ЛП имеет 1-6 цифр)
+    while (parts[0].length > 14) {
+        parts[0] = parts[0].slice(1);
+    }
+
+    // Если первая группа короче 8 цифр — это не номер заказа
+    if (parts[0].length < 8) return null;
+
+    // Вторая группа должна быть ровно 4 цифры
+    if (parts[1].length !== 4) return null;
+
+    // Третья группа 1-2 цифры
+    if (parts[2].length < 1 || parts[2].length > 2) return null;
+
+    // Возвращаем нормализованный номер (без 4-й группы если есть)
+    return parts.slice(0, 3).join('-');
+}
+
 async function handlePdf(file) {
-    console.log(' Начинаем обработку файла:', file);
+    console.log('Начинаем обработку файла:', file);
     console.log('Имя:', file.name, 'Размер:', file.size, 'Тип:', file.type);
-    
     document.getElementById('pdfFileName').textContent = file.name;
     const status = document.getElementById('pdfStatus');
     status.textContent = '⏳ Чтение PDF...';
@@ -99,117 +124,126 @@ async function handlePdf(file) {
     try {
         const buffer = await file.arrayBuffer();
         console.log('📦 Буфер получен, размер:', buffer.byteLength);
-        
         const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
         console.log('📑 PDF загружен, страниц:', pdf.numPages);
-        
+
         let text = '';
         for (let i = 1; i <= pdf.numPages; i++) {
             const page = await pdf.getPage(i);
             const content = await page.getTextContent();
             text += content.items.map(it => it.str).join(' ') + '\n';
-            status.textContent = `⏳ Страница ${i} из ${pdf.numPages}`;
+            status.textContent = ` Страница ${i} из ${pdf.numPages}`;
             if (i % 5 === 0) await new Promise(r => setTimeout(r, 0));
         }
 
-        console.log(' Текст извлечён, длина:', text.length);
-        
+        console.log('Текст извлечён, длина:', text.length);
+
         // Убираем пробелы вокруг дефисов между цифрами
         text = text.replace(/(\d)\s+[-–—]\s+(\d)/g, '$1-$2');
         text = text.replace(/(\d)\s+[-–—]\s+(\d)/g, '$1-$2');
-        
-        // Ищем номера: 3 или 4 группы цифр через дефис
+
+        // Ищем все последовательности цифр-дефис-цифры-дефис-цифры
         const pattern = /\d+[-–—]\d+[-–—]\d+(?:[-–—]\d+)?/g;
-        const matches = text.match(pattern) || [];
+        const rawMatches = text.match(pattern) || [];
 
-        listNumbers = [...new Set(matches.map(n => n.replace(/[–—]/g, '-')))];
+        // Нормализуем каждый найденный номер — отбрасываем слипшиеся порядковые номера
+        const normalizedSet = new Set();
+        for (const raw of rawMatches) {
+            const normalized = normalizeOrderNumber(raw);
+            if (normalized) {
+                normalizedSet.add(normalized);
+            }
+        }
 
+        listNumbers = [...normalizedSet];
         status.textContent = `✅ Найдено ${listNumbers.length} номеров на ${pdf.numPages} стр.`;
         status.className = 'status success';
         console.log('✅ Найдено номеров:', listNumbers.length);
         console.log('Примеры:', listNumbers.slice(0, 10));
-        
+
         if (listNumbers.length === 0) {
-            alert('⚠️ Номера не найдены! Проверьте консоль браузера (F12).');
+            alert('️ Номера не найдены! Проверьте консоль браузера (F12).');
         }
     } catch (err) {
         console.error('❌ Ошибка обработки PDF:', err);
         status.textContent = '❌ Ошибка: ' + err.message;
         status.className = 'status error';
-        alert(' Ошибка при чтении PDF: ' + err.message + '\n\nПроверьте консоль браузера (F12) для деталей.');
+        alert('Ошибка при чтении PDF: ' + err.message + '\n\nПроверьте консоль браузера (F12) для деталей.');
     }
 }
 
 async function startSverka() {
     const text = document.getElementById('reestrText').value.trim();
     if (!text) { alert('Введите номера из 1С'); return; }
-    if (listNumbers.length === 0) { alert('Загрузите Лист отгрузки'); return; }
+    if (listNumbers.length === 0) { alert('Загрузите Лист подбора'); return; }
 
-    reestrNumbers = [...new Set(
-        text.split(/[\r\n]+/)
-            .map(n => n.trim().replace(/\s+/g, '').replace(/[–—]/g, '-'))
-            .filter(n => /^\d+-\d+-\d+(-\d+)?$/.test(n))
-    )];
+    // Парсим реестр 1С с нормализацией
+    const rawLines = text.split(/[\r\n]+/);
+    const reestrSet = new Set();
+    for (const line of rawLines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        const normalized = normalizeOrderNumber(trimmed);
+        if (normalized) {
+            reestrSet.add(normalized);
+        }
+    }
+    reestrNumbers = [...reestrSet];
 
     if (reestrNumbers.length === 0) {
-        alert('Не найдено номеров в формате «цифры-цифры-цифры» или «цифры-цифры-цифры-цифры»');
+        alert('Не найдено номеров в формате «8-14 цифр - 4 цифры - 1-2 цифры»');
         return;
     }
 
     document.getElementById('progressSection').classList.remove('hidden');
     document.getElementById('resultsSection').classList.add('hidden');
     document.getElementById('startBtn').disabled = true;
-
     results = [];
-    const matchedFrom1C = new Set();
-    const matchedPdfIdx = new Set();
 
-    const total = listNumbers.length;
+    // Создаём Set для быстрого поиска O(1)
+    const reestrSetLookup = new Set(reestrNumbers);
+    const listSetLookup = new Set(listNumbers);
+
+    const total = listNumbers.length + reestrNumbers.length;
     let done = 0;
 
-    for (let i = 0; i < listNumbers.length; i++) {
-        const pdfNum = listNumbers[i];
-        let matched = false;
-
-        for (const reestrNum of reestrNumbers) {
-            if (pdfNum === reestrNum ||
-                pdfNum.includes(reestrNum) ||
-                reestrNum.includes(pdfNum)) {
-                matchedFrom1C.add(reestrNum);
-                matchedPdfIdx.add(i);
-                matched = true;
-                break;
-            }
-        }
-
-        if (!matched) {
+    // Находим номера, которые есть в ЛП но нет в 1С
+    for (const listNum of listNumbers) {
+        if (!reestrSetLookup.has(listNum)) {
             results.push({
-                number: pdfNum,
+                number: listNum,
                 inList: true,
                 inReestr: false,
-                status: 'Есть в листе отгрузки, нет в 1С'
+                status: 'Есть в ЛП, нет в 1С'
             });
         }
-
         done++;
-        if (done % 50 === 0 || done === total) {
+        if (done % 100 === 0 || done === total) {
             const pct = Math.round((done / total) * 100);
             document.getElementById('progressFill').style.width = pct + '%';
             document.getElementById('progressPercent').textContent = pct + '%';
-            document.getElementById('progressDetails').textContent =
-                `Обработано ${done}/${total}`;
+            document.getElementById('progressDetails').textContent = `Обработано ${done}/${total}`;
             await new Promise(r => setTimeout(r, 0));
         }
     }
 
+    // Находим номера, которые есть в 1С но нет в ЛП
     for (const reestrNum of reestrNumbers) {
-        if (!matchedFrom1C.has(reestrNum)) {
+        if (!listSetLookup.has(reestrNum)) {
             results.push({
                 number: reestrNum,
                 inList: false,
                 inReestr: true,
-                status: 'Есть в 1С, нет в листе отгрузки'
+                status: 'Есть в 1С, нет в ЛП'
             });
+        }
+        done++;
+        if (done % 100 === 0 || done === total) {
+            const pct = Math.round((done / total) * 100);
+            document.getElementById('progressFill').style.width = pct + '%';
+            document.getElementById('progressPercent').textContent = pct + '%';
+            document.getElementById('progressDetails').textContent = `Обработано ${done}/${total}`;
+            await new Promise(r => setTimeout(r, 0));
         }
     }
 
@@ -220,7 +254,6 @@ async function startSverka() {
 function showResults() {
     const onlyList = results.filter(r => r.inList && !r.inReestr).length;
     const onlyReestr = results.filter(r => !r.inList && r.inReestr).length;
-    const totalDiff = onlyList + onlyReestr;
     const totalChecked = reestrNumbers.length;
     const matched = totalChecked - onlyReestr;
 
@@ -231,11 +264,11 @@ function showResults() {
         </div>
         <div class="summary-card miss">
             <span class="num">${onlyReestr}</span>
-            <div class="lbl">Есть в 1С, нет в листе</div>
+            <div class="lbl">Есть в 1С, нет в ЛП</div>
         </div>
         <div class="summary-card miss">
             <span class="num">${onlyList}</span>
-            <div class="lbl">Есть в листе, нет в 1С</div>
+            <div class="lbl">Есть в ЛП, нет в 1С</div>
         </div>
     `;
 
@@ -250,9 +283,8 @@ function showResults() {
         const sorted = [...results].sort((a, b) => {
             if (a.inReestr && !b.inReestr) return -1;
             if (!a.inReestr && b.inReestr) return 1;
-            return 0;
+            return a.number.localeCompare(b.number);
         });
-
         body.innerHTML = sorted.map(r => {
             const badgeClass = r.inReestr ? 'miss-reestr' : 'miss-list';
             return `<tr>
@@ -263,11 +295,10 @@ function showResults() {
             </tr>`;
         }).join('');
     }
-
     document.getElementById('resultsSection').classList.remove('hidden');
 }
 
-// 🚀 УЛУЧШЕННАЯ ФУНКЦИЯ КОПИРОВАНИЯ С FALLBACK
+// Функция копирования одного номера
 async function copyNumber(num, el) {
     try {
         if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -275,20 +306,16 @@ async function copyNumber(num, el) {
         } else {
             fallbackCopyTextToClipboard(num);
         }
-        
         if (el) {
             const originalText = el.textContent;
             el.textContent = '✓ Скопировано';
             el.classList.add('copied');
-            
             setTimeout(() => {
                 el.textContent = originalText;
                 el.classList.remove('copied');
             }, 2000);
         }
-        
         showToast('📋 Номер скопирован: ' + num);
-        
     } catch (err) {
         console.error('Ошибка копирования:', err);
         try {
@@ -323,11 +350,9 @@ function fallbackCopyTextToClipboard(text) {
     textArea.style.boxShadow = 'none';
     textArea.style.background = 'transparent';
     textArea.style.opacity = '0';
-    
     document.body.appendChild(textArea);
     textArea.focus();
     textArea.select();
-    
     try {
         const successful = document.execCommand('copy');
         if (!successful) throw new Error('execCommand copy failed');
@@ -339,10 +364,10 @@ function fallbackCopyTextToClipboard(text) {
     }
 }
 
+// Функция копирования всех номеров
 function copyAllNumbers() {
     if (results.length === 0) { showToast('Нет номеров для копирования'); return; }
     const text = results.map(r => r.number).join('\n');
-    
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(() => {
             showToast('📋 Скопировано ' + results.length + ' ' + pluralize(results.length, 'номер', 'номера', 'номеров'));
@@ -353,7 +378,7 @@ function copyAllNumbers() {
         });
     } else {
         fallbackCopyTextToClipboard(text);
-        showToast('📋 Скопировано ' + results.length + ' ' + pluralize(results.length, 'номер', 'номера', 'номеров'));
+        showToast(' Скопировано ' + results.length + ' ' + pluralize(results.length, 'номер', 'номера', 'номеров'));
     }
 }
 
@@ -374,7 +399,7 @@ function showToast(msg) {
 function exportCSV() {
     if (results.length === 0) { showToast('Нет данных для экспорта'); return; }
     const csv = [
-        'Номер;В 1С;В листе отгрузки;Статус',
+        'Номер;В 1С;В ЛП;Статус',
         ...results.map(r =>
             `${r.number};${r.inReestr ? 'Да' : 'Нет'};${r.inList ? 'Да' : 'Нет'};${r.status}`
         )
