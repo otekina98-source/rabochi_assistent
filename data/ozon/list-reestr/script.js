@@ -71,7 +71,7 @@ if (abs >= 2 && abs <= 4) return two;
 return five;
 }
 /**
-Нормализация номера заказа
+Нормализация номера заказа для Листа отгрузки (PDF)
 Формат: цифры(8-14)-цифры(4)-цифры(1-2)[-доп]
 Для листа отгрузки слипшихся номеров нет, но оставляем нормализацию
 */
@@ -95,6 +95,22 @@ if (parts[2].length < 1 || parts[2].length > 2) return null;
 // Возвращаем нормализованный номер
 return parts.slice(0, 3).join('-');
 }
+/**
+Мягкая нормализация для реестра 1С
+Принимает любой формат "числа-числа-числа" без строгих ограничений на количество цифр
+*/
+function normalizeReestrNumber(num) {
+if (!num) return null;
+// Убираем пробелы, заменяем тире
+num = num.trim().replace(/\s+/g, '').replace(/[–—]/g, '-');
+// Разбиваем по дефису
+const parts = num.split('-');
+if (parts.length < 3) return null;
+// Проверяем, что каждая из первых трёх частей содержит хотя бы одну цифру
+if (!parts[0] || !parts[1] || !parts[2]) return null;
+// Возвращаем первые три части
+return parts.slice(0, 3).join('-');
+}
 async function handlePdf(file) {
 console.log('Начинаем обработку файла:', file);
 console.log('Имя:', file.name, 'Размер:', file.size, 'Тип:', file.type);
@@ -104,7 +120,7 @@ status.textContent = '⏳ Чтение PDF...';
 status.className = 'status';
 try {
 const buffer = await file.arrayBuffer();
-console.log('📦 Буфер получен, размер:', buffer.byteLength);
+console.log(' Буфер получен, размер:', buffer.byteLength);
 const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
 console.log('📑 PDF загружен, страниц:', pdf.numPages);
 let text = '';
@@ -149,72 +165,72 @@ async function startSverka() {
 const text = document.getElementById('reestrText').value.trim();
 if (!text) { alert('Введите номера из 1С'); return; }
 if (listNumbers.length === 0) { alert('Загрузите Лист отгрузки'); return; }
-// Парсим реестр 1С: сохраняем ВСЕ непустые введённые значения.
-// Если номер нормализуется — кладём нормализованный, иначе — исходное значение.
-// Это гарантирует, что некорректно записанные номера не исчезнут из списка.
- const rawLines = text.split(/[\r\n]+/);
- const reestrSet = new Set();
- for (const line of rawLines) {
-     const trimmed = line.trim();
-     if (!trimmed) continue;
-     const normalized = normalizeOrderNumber(trimmed);
-     reestrSet.add(normalized || trimmed);
- }
- reestrNumbers = [...reestrSet];
- if (reestrNumbers.length === 0) {
-     alert('Не найдено номеров в формате «8-14 цифр - 4 цифры - 1-2 цифры»');
-     return;
- }
- document.getElementById('progressSection').classList.remove('hidden');
- document.getElementById('resultsSection').classList.add('hidden');
- document.getElementById('startBtn').disabled = true;
- results = [];
- copiedNumbers.clear(); // Сбрасываем скопированные номера
- // Создаём Set для быстрого поиска O(1)
- const reestrSetLookup = new Set(reestrNumbers);
- const listSetLookup = new Set(listNumbers);
- const total = listNumbers.length + reestrNumbers.length;
- let done = 0;
- // Находим номера, которые есть в Листе отгрузки но нет в 1С
- for (const listNum of listNumbers) {
-     if (!reestrSetLookup.has(listNum)) {
-         results.push({
-             number: listNum,
-             inList: true,
-             inReestr: false,
-             status: 'Есть в Листе отгрузки, нет в 1С'
-         });
-     }
-     done++;
-     if (done % 100 === 0 || done === total) {
-         const pct = Math.round((done / total) * 100);
-         document.getElementById('progressFill').style.width = pct + '%';
-         document.getElementById('progressPercent').textContent = pct + '%';
-         document.getElementById('progressDetails').textContent = `Обработано ${done}/${total}`;
-         await new Promise(r => setTimeout(r, 0));
-     }
- }
- // Находим номера, которые есть в 1С но нет в Листе отгрузки
- for (const reestrNum of reestrNumbers) {
-     if (!listSetLookup.has(reestrNum)) {
-         results.push({
-             number: reestrNum,
-             inList: false,
-             inReestr: true,
-             status: 'Есть в 1С, нет в Листе отгрузки'
-         });
-     }
-     done++;
-     if (done % 100 === 0 || done === total) {
-         const pct = Math.round((done / total) * 100);
-         document.getElementById('progressFill').style.width = pct + '%';
-         document.getElementById('progressPercent').textContent = pct + '%';
-         document.getElementById('progressDetails').textContent = `Обработано ${done}/${total}`;
-         await new Promise(r => setTimeout(r, 0));
-     }
- }
- showResults();
- document.getElementById('startBtn').disabled = false;
+// Парсим реестр 1С с мягкой нормализацией.
+// Сохраняем ВСЕ введённые значения: если номер нормализуется — кладём нормализованный,
+// иначе — исходное значение. Это гарантирует, что некорректно записанные номера не исчезнут.
+const rawLines = text.split(/[\r\n]+/);
+const reestrSet = new Set();
+for (const line of rawLines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const normalized = normalizeReestrNumber(trimmed);
+    reestrSet.add(normalized || trimmed);
+}
+reestrNumbers = [...reestrSet];
+if (reestrNumbers.length === 0) {
+    alert('Не найдено номеров в реестре 1С');
+    return;
+}
+document.getElementById('progressSection').classList.remove('hidden');
+document.getElementById('resultsSection').classList.add('hidden');
+document.getElementById('startBtn').disabled = true;
+results = [];
+copiedNumbers.clear(); // Сбрасываем скопированные номера
+// Создаём Set для быстрого поиска O(1)
+const reestrSetLookup = new Set(reestrNumbers);
+const listSetLookup = new Set(listNumbers);
+const total = listNumbers.length + reestrNumbers.length;
+let done = 0;
+// Находим номера, которые есть в Листе отгрузки но нет в 1С
+for (const listNum of listNumbers) {
+    if (!reestrSetLookup.has(listNum)) {
+        results.push({
+            number: listNum,
+            inList: true,
+            inReestr: false,
+            status: 'Есть в Листе отгрузки, нет в 1С'
+        });
+    }
+    done++;
+    if (done % 100 === 0 || done === total) {
+        const pct = Math.round((done / total) * 100);
+        document.getElementById('progressFill').style.width = pct + '%';
+        document.getElementById('progressPercent').textContent = pct + '%';
+        document.getElementById('progressDetails').textContent = `Обработано ${done}/${total}`;
+        await new Promise(r => setTimeout(r, 0));
+    }
+}
+// Находим номера, которые есть в 1С но нет в Листе отгрузки
+for (const reestrNum of reestrNumbers) {
+    if (!listSetLookup.has(reestrNum)) {
+        results.push({
+            number: reestrNum,
+            inList: false,
+            inReestr: true,
+            status: 'Есть в 1С, нет в Листе отгрузки'
+        });
+    }
+    done++;
+    if (done % 100 === 0 || done === total) {
+        const pct = Math.round((done / total) * 100);
+        document.getElementById('progressFill').style.width = pct + '%';
+        document.getElementById('progressPercent').textContent = pct + '%';
+        document.getElementById('progressDetails').textContent = `Обработано ${done}/${total}`;
+        await new Promise(r => setTimeout(r, 0));
+    }
+}
+showResults();
+document.getElementById('startBtn').disabled = false;
 }
 function showResults() {
 const onlyList = results.filter(r => r.inList && !r.inReestr).length;
@@ -329,7 +345,7 @@ results.forEach(r => copiedNumbers.add(r.number));
 document.querySelectorAll('.num-copy').forEach(el => {
 el.classList.add('copied-persistent');
 });
-showToast('📋 Скопировано ' + results.length + ' ' + pluralize(results.length, 'номер', 'номера', 'номеров'));
+showToast(' Скопировано ' + results.length + ' ' + pluralize(results.length, 'номер', 'номера', 'номеров'));
 }).catch(err => {
 console.error('Ошибка копирования:', err);
 fallbackCopyTextToClipboard(text);
