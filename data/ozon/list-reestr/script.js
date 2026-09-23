@@ -71,35 +71,10 @@ if (abs >= 2 && abs <= 4) return two;
 return five;
 }
 /**
-Нормализация номера заказа для Листа отгрузки (PDF)
-Формат: цифры(8-14)-цифры(4)-цифры(1-2)[-доп]
-Для листа отгрузки слипшихся номеров нет, но оставляем нормализацию
+Нормализация номера заказа
+Теперь принимает любой формат "числа-числа-числа" без строгих ограничений на количество цифр
 */
 function normalizeOrderNumber(num) {
-if (!num) return null;
-// Убираем пробелы, заменяем тире
-num = num.trim().replace(/\s+/g, '').replace(/[–—]/g, '-');
-// Разбиваем по дефису
-const parts = num.split('-');
-if (parts.length < 3) return null;
-// Если первая группа длиннее 14 цифр — отбрасываем лишние слева
-while (parts[0].length > 14) {
-parts[0] = parts[0].slice(1);
-}
-// Если первая группа короче 8 цифр — это не номер заказа
-if (parts[0].length < 8) return null;
-// Вторая группа должна быть ровно 4 цифры
-if (parts[1].length !== 4) return null;
-// Третья группа 1-2 цифры
-if (parts[2].length < 1 || parts[2].length > 2) return null;
-// Возвращаем нормализованный номер
-return parts.slice(0, 3).join('-');
-}
-/**
-Мягкая нормализация для реестра 1С
-Принимает любой формат "числа-числа-числа" без строгих ограничений на количество цифр
-*/
-function normalizeReestrNumber(num) {
 if (!num) return null;
 // Убираем пробелы, заменяем тире
 num = num.trim().replace(/\s+/g, '').replace(/[–—]/g, '-');
@@ -120,7 +95,7 @@ status.textContent = '⏳ Чтение PDF...';
 status.className = 'status';
 try {
 const buffer = await file.arrayBuffer();
-console.log(' Буфер получен, размер:', buffer.byteLength);
+console.log('📦 Буфер получен, размер:', buffer.byteLength);
 const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
 console.log('📑 PDF загружен, страниц:', pdf.numPages);
 let text = '';
@@ -173,7 +148,7 @@ const reestrSet = new Set();
 for (const line of rawLines) {
     const trimmed = line.trim();
     if (!trimmed) continue;
-    const normalized = normalizeReestrNumber(trimmed);
+    const normalized = normalizeOrderNumber(trimmed);
     reestrSet.add(normalized || trimmed);
 }
 reestrNumbers = [...reestrSet];
@@ -301,7 +276,7 @@ fallbackCopyTextToClipboard(num);
          }
          showToast(' Номер скопирован: ' + num);
      } catch (fallbackErr) {
-         showToast('❌ Не удалось скопировать');
+         showToast(' Не удалось скопировать');
          console.error('Fallback также не сработал:', fallbackErr);
      }
  }
@@ -345,7 +320,7 @@ results.forEach(r => copiedNumbers.add(r.number));
 document.querySelectorAll('.num-copy').forEach(el => {
 el.classList.add('copied-persistent');
 });
-showToast(' Скопировано ' + results.length + ' ' + pluralize(results.length, 'номер', 'номера', 'номеров'));
+showToast('📋 Скопировано ' + results.length + ' ' + pluralize(results.length, 'номер', 'номера', 'номеров'));
 }).catch(err => {
 console.error('Ошибка копирования:', err);
 fallbackCopyTextToClipboard(text);
