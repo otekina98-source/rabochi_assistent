@@ -16,7 +16,7 @@ path: 'data/yandex-market/gruzomesta/index.html'
 },
 {
 id: 'podpis-etiketok',
-title: 'Подпись этикеток',
+title: 'НЕ РАБОТАЕТ! ПРОСЬБА ПОЛЬЗОВАТЬСЯ PDF-TOOL Подпись этикеток',
 path: 'data/yandex-market/podpis-etiketok/index.html'
 },
 {
