@@ -1,232 +1,689 @@
 <!DOCTYPE html>
+
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Подпись этикеток — Рабочий Ассистент</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #FAF8FF; color: #1d1d1f; line-height: 1.6; min-height: 100vh; }
-        .back-link { display: inline-block; background: #E6E6FA; border: none; padding: 10px 22px; border-radius: 10px; color: #1d1d1f; text-decoration: none; font-size: 1em; transition: all 0.2s; }
-        .back-link:hover { background: #D8BFD8; color: #1d1d1f; }
-        .page-title { font-size: 2em; font-weight: 700; margin: 14px 0 0 0; }
-        .step-container { display: none; animation: fadeIn 0.3s ease; }
-        .step-container.active { display: block; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .card { background: #E6E6FA; border: none; border-radius: 16px; }
-        .card-header { background: #D8BFD8; color: #1d1d1f; border: none; border-radius: 16px 16px 0 0 !important; font-weight: 700; }
-        .card-body { background: #E6E6FA; border-radius: 0 0 16px 16px; }
-        .btn-primary, .btn-success { background: #D8BFD8; border: none; color: #1d1d1f; font-weight: 600; border-radius: 10px; padding: 12px 24px; }
-        .btn-primary:hover, .btn-success:hover { background: #C9A9C9; color: #1d1d1f; }
-        .btn-light { background: rgba(255,255,255,0.7); color: #1d1d1f; border: none; border-radius: 10px; }
-        .btn-light:hover { background: #ffffff; color: #1d1d1f; }
-        .btn-outline-secondary { background: #E6E6FA; border: none; color: #1d1d1f; border-radius: 10px; }
-        .drop-zone { border: 2px dashed #D8BFD8; border-radius: 16px; transition: all 0.2s; cursor: pointer; min-height: 200px; display: flex; align-items: center; justify-content: center; flex-direction: column; background: rgba(255,255,255,0.7); }
-        .drop-zone.dragover { border-color: #C9A9C9; background: #ffffff; }
-        #pdfPreviewArea { position: relative; height: 70vh; background: #FAF8FF; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 1px solid #E6E6FA; border-radius: 16px; }
-        #previewWrapper { position: relative; box-shadow: 0 2px 12px rgba(216,191,216,0.5); }
-        #pdfCanvas { display: block; }
-        .stats-card { border-left: 4px solid #D8BFD8; background: rgba(255,255,255,0.7); border-radius: 10px; }
-        .table-responsive { max-height: 500px; overflow-y: auto; border-radius: 10px; }
-        .table-light { --bs-table-bg: #D8BFD8; }
-        .form-control, .form-select { border: 2px solid #E6E6FA; border-radius: 10px; background: #ffffff; }
-        .form-control:focus, .form-select:focus { border-color: #D8BFD8; box-shadow: none; }
-        .progress { background: #E6E6FA; border-radius: 10px; }
-        .progress-bar { background: #D8BFD8; color: #1d1d1f; }
-        .alert-info { background: rgba(255,255,255,0.7); border: 1px solid #E6E6FA; color: #1d1d1f; }
-        .text-muted { color: #86868b !important; }
-        textarea.form-control { font-family: 'Courier New', monospace; font-size: 14px; }
-        .instruction-card ol { margin: 0; padding-left: 20px; }
-        .instruction-card li { margin-bottom: 8px; font-size: 0.9em; }
-    </style>
+
+```
+<title>🖨️ Подпись этикеток</title>
+
+<link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+>
+
+<style>
+    body {
+        margin: 0;
+        min-height: 100vh;
+        background: #f4f0ff;
+        font-family: Arial, sans-serif;
+        color: #000000;
+    }
+
+    .main-container {
+        width: 100%;
+        max-width: 1150px;
+        margin: 0 auto;
+        padding: 20px 25px 50px;
+    }
+
+    /* МЕНЮ */
+
+    .top-menu {
+        display: flex;
+        justify-content: flex-start;
+        margin-bottom: 22px;
+    }
+
+    .menu-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 18px;
+        background: #ffffff;
+        color: #000000;
+        text-decoration: none;
+        border-radius: 12px;
+        border: 1px solid #cfc2ec;
+        box-shadow: 0 4px 14px rgba(70, 50, 110, .08);
+        font-size: 14px;
+        font-weight: 700;
+        transition: all .2s ease;
+    }
+
+    .menu-btn:hover {
+        background: #8067c7;
+        border-color: #8067c7;
+        color: #ffffff;
+        transform: translateY(-1px);
+    }
+
+    .page-title {
+        text-align: left;
+        font-size: 30px;
+        font-weight: 700;
+        margin-bottom: 25px;
+        color: #000000;
+    }
+
+    .instruction {
+        background: #fff;
+        border-radius: 18px;
+        padding: 20px 24px;
+        margin-bottom: 22px;
+        box-shadow: 0 5px 20px rgba(70, 50, 110, .08);
+        border: 1px solid rgba(120, 100, 180, .12);
+    }
+
+    .instruction-text {
+        font-size: 14px;
+        line-height: 1.6;
+        color: #000000;
+    }
+
+    .instruction-text div {
+        margin-bottom: 6px;
+    }
+
+    .cards-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 22px;
+    }
+
+    .tool-card {
+        background: #fff;
+        border-radius: 18px;
+        padding: 25px;
+        box-shadow: 0 5px 20px rgba(70, 50, 110, .08);
+        border: 1px solid rgba(120, 100, 180, .12);
+        min-height: 235px;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .tool-card h3 {
+        margin: 0 0 10px;
+        font-size: 21px;
+        font-weight: 700;
+        color: #000000;
+    }
+
+    .tool-card p {
+        margin: 0 0 18px;
+        color: #000000;
+        line-height: 1.5;
+        font-size: 14px;
+    }
+
+    .drop-zone {
+        margin-top: auto;
+        border: 2px dashed #b9a9df;
+        border-radius: 14px;
+        padding: 22px 15px;
+        text-align: center;
+        background: #faf8ff;
+        cursor: pointer;
+        transition: all .2s ease;
+    }
+
+    .drop-zone:hover,
+    .drop-zone.dragover {
+        background: #f0ebff;
+        border-color: #8067c7;
+    }
+
+    .drop-zone input[type="file"] {
+        display: none;
+    }
+
+    .drop-zone-title {
+        font-size: 15px;
+        font-weight: 600;
+        color: #000000;
+    }
+
+    .drop-zone-subtitle {
+        margin-top: 5px;
+        font-size: 12px;
+        color: #000000;
+    }
+
+    .file-name {
+        margin-top: 10px;
+        font-size: 13px;
+        color: #000000;
+        word-break: break-word;
+    }
+
+    .downloads {
+        margin-top: 25px;
+        background: #fff;
+        border-radius: 18px;
+        padding: 25px;
+        box-shadow: 0 5px 20px rgba(70, 50, 110, .08);
+        border: 1px solid rgba(120, 100, 180, .12);
+    }
+
+    .downloads-title {
+        text-align: center;
+        font-size: 20px;
+        font-weight: 700;
+        margin-bottom: 18px;
+        color: #000000;
+    }
+
+    .download-buttons {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    .btn-main {
+        background: #8067c7;
+        border: 1px solid #8067c7;
+        color: #fff;
+        border-radius: 10px;
+        padding: 10px 18px;
+        font-weight: 600;
+    }
+
+    .btn-main:hover {
+        background: #6f55b7;
+        border-color: #6f55b7;
+        color: #fff;
+    }
+
+    .btn-final {
+        background: #6552a5;
+        border: 1px solid #6552a5;
+        color: #fff;
+        border-radius: 10px;
+        padding: 10px 18px;
+        font-weight: 600;
+    }
+
+    .btn-final:hover {
+        background: #53418e;
+        border-color: #53418e;
+        color: #fff;
+    }
+
+    button:disabled {
+        opacity: .45;
+        cursor: not-allowed;
+    }
+
+    .status-box {
+        display: none;
+        margin-top: 22px;
+        background: #fff;
+        border-radius: 18px;
+        padding: 20px;
+        box-shadow: 0 5px 20px rgba(70, 50, 110, .08);
+    }
+
+    .status-box.show {
+        display: block;
+    }
+
+    .status-title {
+        font-weight: 700;
+        margin-bottom: 12px;
+        color: #000000;
+    }
+
+    .progress {
+        height: 8px;
+        border-radius: 10px;
+        background: #e7e1f5;
+    }
+
+    .progress-bar {
+        background: #8067c7;
+    }
+
+    .log {
+        margin-top: 12px;
+        max-height: 220px;
+        overflow-y: auto;
+        padding: 12px;
+        border-radius: 10px;
+        background: #faf9fd;
+        font-size: 13px;
+        white-space: pre-wrap;
+        color: #000000;
+    }
+
+    @media (max-width: 750px) {
+        .cards-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .page-title {
+            font-size: 25px;
+        }
+
+        .download-buttons {
+            flex-direction: column;
+        }
+
+        .download-buttons button {
+            width: 100%;
+        }
+
+        .top-menu {
+            justify-content: center;
+        }
+    }
+</style>
+```
+
 </head>
-<body class="container py-4">
-    <div class="mb-4">
-        <a href="../../../index.html" class="back-link">← Назад к ассистенту</a>
-        <h2 class="page-title">🖨️ Подпись этикеток</h2>
-        <div class="text-muted">ЯндексМаркет · автоматическая подпись названий товаров на этикетках</div>
-    </div>
 
-    <div class="card shadow-sm mb-4 instruction-card">
-        <div class="card-header" style="cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#instructionBlock">📖 Инструкция (свернуть/развернуть)</div>
-        <div id="instructionBlock" class="collapse show">
-            <div class="card-body">
-                <ol>
-                    <li>Скачайте Excel с заказами из ЛК и перетащите в окно. Обязательно удалите лишние колонки.</li>
-                    <li>При необходимости добавьте номера в поле «Исключить заказы вручную» (если у вас есть заказы, которые ранее отгружены, но попали в АКТ и ШК) — они не попадут в таблицу, а их наклейки удалятся. Поле пустое — обрабатываются все.</li>
-                    <li>Загрузить Прайс. Нажать «Сопоставить данные».</li>
-                    <li>Проверить: ✅ — найдено, ❌ — нет. Скачать Excel с результатом — это будет файл ШК и НАЗВАНИЯ.</li>
-                    <li>Загрузить PDF этикеток. Название товара будет напечатано автоматически одной строкой в самом низу этикетки.</li>
-                    <li>Заказы с «Грузоместом» больше 1 исключаются автоматически, их наклейки удаляются.</li>
-                    <li style="background:#FFF3CD; border-left:4px solid #FFC107; padding:8px 12px; border-radius:8px; margin-bottom:12px;"><strong>⚠️ Готовый PDF сохраняется в исходном качестве. Если нужен меньший объём для загрузки — сожмите готовый файл через <a href="https://www.ilovepdf.com/ru/compress_pdf" target="_blank" rel="noopener" style="font-weight:700;">iLovePDF</a> (откроется в новой вкладке) ЭТО ВРЕМЕННЫЕ НЕУДОБСТВА!.</strong></li>
-                    <li>«Начать обработку» — распознавание номеров, вставка названий, сортировка по алфавиту.</li>
-                    <li>Если нужно заменить файл (заказы, прайс или PDF) — нажмите «🔄 Загрузить другой файл» на нужном шаге.</li>
-                    <li>При большом объеме наклеек, от 700, может быть долгая обработка. Желательно никуда не выходить со страницы и никуда не нажимать.</li>
-                    <li>Первый запуск — нужен интернет (загрузка модуля). Файлы наружу не передаются, всё в браузере.</li>
-                </ol>
-            </div>
+<body>
+
+<div class="main-container">
+
+```
+<div class="top-menu">
+    <a href="../index.html" class="menu-btn">
+        🏠 Меню
+    </a>
+</div>
+
+<div class="page-title">
+    🖨️ Подпись этикеток
+</div>
+
+<div class="instruction">
+
+    <div class="instruction-text">
+
+        <div>
+            <strong>1.</strong>
+            Загрузите эксель-файл, который вы сделали из реестра 1С. В нем
+            <strong>обязательно</strong> должны быть столбики
+            <strong>«Идентификатор МП»</strong> и
+            <strong>«Количество»</strong>.
         </div>
-    </div>
 
-    <div class="progress mb-4" style="height: 5px;">
-        <div id="globalProgress" class="progress-bar" role="progressbar" style="width: 0%"></div>
-    </div>
-
-    <!-- STEP 1 -->
-    <div id="step1" class="step-container active">
-        <div class="card shadow-sm">
-            <div class="card-header">1. Загрузка заказов</div>
-            <div class="card-body">
-                <div class="drop-zone" id="ordersDropZone">
-                    <p class="mt-2 mb-0">Перетащите Excel с заказами сюда</p>
-                    <small class="text-muted">Поддерживаются .xlsx, .xls</small>
-                    <input type="file" accept=".xlsx,.xls" class="d-none" id="ordersInput">
-                </div>
-                <div class="mt-3">
-                    <label class="form-label small mb-1">Исключить заказы вручную (по одному номеру в строке)</label>
-                    <textarea id="manualExcludeInput" class="form-control" rows="3" placeholder="Например:&#10;59688770240&#10;59773992450"></textarea>
-                    <small class="text-muted">Эти номера не попадут в таблицу и готовый Excel, а их этикетки автоматически удалятся из готового PDF. Оставьте поле пустым — будут обрабатываться все заказы.</small>
-                </div>
-                <div id="ordersStats" class="mt-3 d-none">
-                    <div class="row g-3">
-                        <div class="col-md-4"><div class="stats-card p-3">Всего: <strong id="statTotal">0</strong></div></div>
-                        <div class="col-md-4"><div class="stats-card p-3">Исключено (>1 места): <strong id="statExcluded">0</strong></div></div>
-                        <div class="col-md-4"><div class="stats-card p-3">К обработке: <strong id="statRemaining">0</strong></div></div>
-                    </div>
-                    <button class="btn btn-primary mt-3 w-100" onclick="goToStep(2)">Далее: Загрузить прайс</button>
-                    <button class="btn btn-light btn-sm w-100 mt-2" onclick="resetOrdersZone()">🔄 Загрузить другой файл заказов</button>
-                </div>
-            </div>
+        <div>
+            <strong>2.</strong>
+            Скачайте список заказов из ЛК. Ничего менять в файле не нужно.
+            Просто загрузите его в плашку
+            <strong>Список заказов из ЛК.</strong>
         </div>
-    </div>
 
-    <!-- STEP 2 -->
-    <div id="step2" class="step-container">
-        <div class="card shadow-sm">
-            <div class="card-header">2. Загрузка прайс-листа</div>
-            <div class="card-body">
-                <button class="btn btn-light btn-sm mb-2" onclick="goToStep(1)">← Назад</button>
-                <div class="drop-zone" id="priceDropZone">
-                    <p class="mt-2 mb-0">Перетащите прайс-лист</p>
-                    <input type="file" accept=".xlsx,.xls" class="d-none" id="priceInput">
-                </div>
-                <div id="priceStats" class="mt-3 d-none alert alert-info">
-                    Загружено товаров: <strong id="priceCount">0</strong>
-                </div>
-                <button class="btn btn-primary mt-3 w-100" id="btnMatch" disabled onclick="matchAndShowTable()">Сопоставить данные</button>
-                <button class="btn btn-light btn-sm w-100 mt-2" onclick="resetPriceZone()">🔄 Загрузить другой прайс</button>
-            </div>
+        <div>
+            <strong>3.</strong>
+            Загрузите <strong>«Прайс»</strong>. При необходимости обновите его.
         </div>
-    </div>
 
-    <!-- STEP 3 -->
-    <div id="step3" class="step-container">
-        <div class="card shadow-sm">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <span>3. Проверка сопоставления</span>
-                <button class="btn btn-sm btn-light" onclick="exportTable()">📥 Скачать Excel</button>
-            </div>
-            <div class="card-body">
-                <button class="btn btn-light btn-sm mb-2" onclick="goToStep(2)">← Назад</button>
-                <div class="input-group mb-3">
-                    <input type="text" class="form-control" placeholder="Поиск по заказу или товару..." onkeyup="filterTable(this.value)">
-                </div>
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle" id="resultTable">
-                        <thead class="table-light sticky-top">
-                            <tr><th>Заказ</th><th>SKU</th><th>Товар</th><th>Статус</th></tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-                <div class="d-flex justify-content-between align-items-center mt-3">
-                    <span id="tableInfo"></span>
-                    <button class="btn btn-primary" onclick="goToStep(4)">Далее: Загрузить PDF</button>
-                </div>
-            </div>
+        <div>
+            <strong>4.</strong>
+            Загрузите файл с этикетками, которые вы скачали из ЛК.
         </div>
+
+    </div>
+</div>
+
+<div class="cards-grid">
+
+    <div class="tool-card">
+
+        <h3>1. Реестр 1С</h3>
+
+        <p>
+            Загрузите эксель-файл, который вы сделали из реестра 1С.
+            Из 1С используются:
+            <strong>Идентификатор МП</strong> и
+            <strong>Количество</strong>.
+        </p>
+
+        <label class="drop-zone" id="orders1cDropZone">
+
+            <input
+                type="file"
+                id="orders1cFile"
+                accept=".xlsx,.xls,.csv"
+            >
+
+            <div class="drop-zone-title">
+                📂 Загрузить реестр 1С
+            </div>
+
+            <div class="drop-zone-subtitle">
+                Перетащите файл сюда или нажмите для выбора
+            </div>
+
+            <div class="file-name" id="orders1cFileName"></div>
+
+        </label>
+
     </div>
 
-    <!-- STEP 4 -->
-    <div id="step4" class="step-container">
-        <div class="card shadow-sm">
-            <div class="card-header">4. Настройка этикетки</div>
-            <div class="card-body">
-                <button class="btn btn-light btn-sm mb-2" onclick="goToStep(3)">← Назад</button>
-                <div class="row">
-                    <div class="col-lg-8">
-                        <div class="drop-zone mb-3" id="pdfDropZone" style="min-height: 150px;">
-                            <p class="mt-2 mb-0">Загрузите PDF с этикетками</p>
-                            <input type="file" accept=".pdf" class="d-none" id="pdfInput">
-                        </div>
-                        <button class="btn btn-light btn-sm w-100 mb-3" onclick="resetPdfZone()">🔄 Загрузить другой PDF</button>
-                        <div id="pdfPreviewArea" class="d-none">
-                            <div id="previewWrapper">
-                                <canvas id="pdfCanvas"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-lg-4">
-                        <div class="card">
-                            <div class="card-body">
-                                <h6>Параметры текста</h6>
-                                <p class="small text-muted">Название вставляется автоматически одной строкой внизу этикетки (под штрихкодом).</p>
-                                <div class="row g-2 mb-2">
-                                    <div class="col">
-                                        <label class="form-label small mb-1">Размер</label>
-                                        <input type="number" class="form-control form-control-sm" id="cfgFontSize" value="5" min="1" max="72">
-                                    </div>
-                                    <div class="col">
-                                        <label class="form-label small mb-1">Цвет</label>
-                                        <select class="form-select form-select-sm" id="cfgColor">
-                                            <option value="#000000" selected>Чёрный</option>
-                                            <option value="#ff0000">Красный</option>
-                                            <option value="#0000ff">Синий</option>
-                                            <option value="#ffffff">Белый</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <button class="btn btn-success w-100 mt-2" id="btnStartProcess" disabled onclick="startProcessing()">🚀 Начать обработку</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+    <div class="tool-card">
+
+        <h3>2. Список заказов из ЛК</h3>
+
+        <p>
+            Загрузите файл сюда.
+            Ничего менять не нужно.
+        </p>
+
+        <label class="drop-zone" id="lkDropZone">
+
+            <input
+                type="file"
+                id="lkFile"
+                accept=".xlsx,.xls,.csv"
+            >
+
+            <div class="drop-zone-title">
+                📂 Загрузить список заказов из ЛК
             </div>
-        </div>
+
+            <div class="drop-zone-subtitle">
+                Перетащите файл сюда или нажмите для выбора
+            </div>
+
+            <div class="file-name" id="lkFileName"></div>
+
+        </label>
+
     </div>
 
-    <!-- STEP 5 -->
-    <div id="step5" class="step-container">
-        <div class="card shadow-sm text-center py-5">
-            <div id="processingView">
-                <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;"></div>
-                <h4>Обработка PDF...</h4>
-                <div class="progress mx-auto mt-3" style="max-width: 400px; height: 25px;">
-                    <div id="processProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%">0%</div>
-                </div>
-                <p class="text-muted mt-2" id="processStatus">Инициализация OCR...</p>
-                <p class="text-muted small">При первом запуске браузер скачивает языковые пакеты распознавания (~20 МБ) — далее они хранятся в кэше.</p>
+    <div class="tool-card">
+
+        <h3>3. Прайс</h3>
+
+        <p>
+            Загрузите прайс. При необходимости обновите его.
+        </p>
+
+        <label class="drop-zone" id="priceDropZone">
+
+            <input
+                type="file"
+                id="priceFile"
+                accept=".xlsx,.xls,.csv"
+            >
+
+            <div class="drop-zone-title">
+                📂 Загрузить прайс
             </div>
-            <div id="resultView" class="d-none">
-                <h3 class="mt-3">Готово!</h3>
-                <p class="text-muted">Все страницы обработаны</p>
-                <div class="d-grid gap-3 col-md-6 mx-auto mt-4">
-                    <a id="downloadPdfBtn" class="btn btn-primary btn-lg">📄 Скачать PDF</a>
-                    <a id="downloadLogBtn" class="btn btn-outline-secondary btn-lg">📊 Скачать журнал</a>
-                    <a href="../../../index.html" class="btn btn-light">← Назад к ассистенту</a>
-                    <button class="btn btn-link" onclick="location.reload()">Новая обработка</button>
-                </div>
+
+            <div class="drop-zone-subtitle">
+                Перетащите файл сюда или нажмите для выбора
             </div>
-        </div>
+
+            <div class="file-name" id="priceFileName"></div>
+
+        </label>
+
     </div>
 
-    <script src="font-data.js"></script>
-    <script src="fontkit.local.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script src="https://cdn.sheetjs.com/xlsx-0.18.5/package/dist/xlsx.full.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-    <script src="app.js"></script>
+    <div class="tool-card">
+
+        <h3>4. Этикетки</h3>
+
+        <p>
+            Загрузите PDF с этикетками.
+            После загрузки программа найдёт номера заказов
+            и нанесёт соответствующие наименования товаров.
+        </p>
+
+        <label class="drop-zone" id="pdfDropZone">
+
+            <input
+                type="file"
+                id="pdfFile"
+                accept=".pdf"
+            >
+
+            <div class="drop-zone-title">
+                📄 Загрузить этикетки PDF
+            </div>
+
+            <div class="drop-zone-subtitle">
+                Перетащите PDF сюда или нажмите для выбора
+            </div>
+
+            <div class="file-name" id="pdfFileName"></div>
+
+        </label>
+
+    </div>
+
+</div>
+
+<div class="downloads">
+
+    <div class="downloads-title">
+        📥 Скачать файлы
+    </div>
+
+    <div class="download-buttons">
+
+        <button
+            type="button"
+            class="btn btn-main"
+            id="downloadOrdersNamesBtn"
+            disabled
+        >
+            Скачать заказы и наименования
+        </button>
+
+        <button
+            type="button"
+            class="btn btn-final"
+            id="downloadLabelsBtn"
+            disabled
+        >
+            Скачать готовые этикетки
+        </button>
+
+    </div>
+
+</div>
+
+<div class="status-box" id="statusBox">
+
+    <div class="status-title" id="statusTitle">
+        Обработка
+    </div>
+
+    <div class="progress">
+
+        <div
+            class="progress-bar"
+            id="progressBar"
+            role="progressbar"
+            style="width: 0%;"
+        ></div>
+
+    </div>
+
+    <div class="log" id="log"></div>
+
+</div>
+```
+
+</div>
+
+<script src="font-data.js"></script>
+
+<script src="fontkit.local.js"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+
+<script>
+
+    window.DOWNLOAD_PREFIX = 'шк-';
+
+    function setFileName(inputId, outputId) {
+
+        const input = document.getElementById(inputId);
+        const output = document.getElementById(outputId);
+
+        if (!input || !output) {
+            return;
+        }
+
+        input.addEventListener('change', function () {
+
+            output.textContent =
+                this.files?.length
+                    ? this.files[0].name
+                    : '';
+
+        });
+    }
+
+    function setupDropZone(zoneId, inputId) {
+
+        const zone = document.getElementById(zoneId);
+        const input = document.getElementById(inputId);
+
+        if (!zone || !input) {
+            return;
+        }
+
+        zone.addEventListener('dragover', function (event) {
+
+            event.preventDefault();
+            zone.classList.add('dragover');
+
+        });
+
+        zone.addEventListener('dragleave', function () {
+
+            zone.classList.remove('dragover');
+
+        });
+
+        zone.addEventListener('drop', function (event) {
+
+            event.preventDefault();
+            zone.classList.remove('dragover');
+
+            if (!event.dataTransfer.files.length) {
+                return;
+            }
+
+            try {
+
+                const dataTransfer = new DataTransfer();
+
+                for (const file of event.dataTransfer.files) {
+                    dataTransfer.items.add(file);
+                }
+
+                input.files = dataTransfer.files;
+
+                input.dispatchEvent(
+                    new Event('change', {
+                        bubbles: true
+                    })
+                );
+
+            } catch (error) {
+
+                console.error(error);
+
+            }
+
+        });
+    }
+
+    window.downloadWithPrefix = function (blob, filename) {
+
+        if (!blob) {
+            return;
+        }
+
+        filename = String(filename || 'файл');
+
+        if (!filename.startsWith('шк-')) {
+            filename = 'шк-' + filename;
+        }
+
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+
+        a.href = url;
+        a.download = filename;
+
+        document.body.appendChild(a);
+
+        a.click();
+
+        a.remove();
+
+        setTimeout(
+            () => URL.revokeObjectURL(url),
+            1000
+        );
+    };
+
+    document.addEventListener('DOMContentLoaded', function () {
+
+        setFileName(
+            'orders1cFile',
+            'orders1cFileName'
+        );
+
+        setFileName(
+            'lkFile',
+            'lkFileName'
+        );
+
+        setFileName(
+            'priceFile',
+            'priceFileName'
+        );
+
+        setFileName(
+            'pdfFile',
+            'pdfFileName'
+        );
+
+        setupDropZone(
+            'orders1cDropZone',
+            'orders1cFile'
+        );
+
+        setupDropZone(
+            'lkDropZone',
+            'lkFile'
+        );
+
+        setupDropZone(
+            'priceDropZone',
+            'priceFile'
+        );
+
+        setupDropZone(
+            'pdfDropZone',
+            'pdfFile'
+        );
+
+    });
+
+</script>
+
+<script src="app.js"></script>
+
 </body>
 </html>
