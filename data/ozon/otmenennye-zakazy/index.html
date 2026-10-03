@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Сверка реестра 1С и отменённых заказов — ОЗОН</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="../../../assets/site.css?v=2">
+    <link rel="stylesheet" href="../../../assets/themes.css">
+    <script>
+        try {
+            document.documentElement.setAttribute(
+                "data-theme",
+                localStorage.getItem("ra-theme") || "light"
+            );
+        } catch (e) {}
+    </script>
+</head>
+<body>
+    <div class="container">
+        <button class="back-btn" onclick="window.location.href='../../../index.html'">
+            ← В меню
+        </button>
+
+        <div class="sverka-header">
+            <h2>Сверка реестра 1С и отменённых заказов</h2>
+            <p class="subtitle">
+                сравнивает список заказов из ЛК и 1С и находит отменённые заказы • ОЗОН
+            </p>
+        </div>
+
+        <div class="sverka-layout">
+
+            <!-- Плашка 1: Реестр 1С -->
+            <div class="panel reestr-panel">
+                <div class="panel-header">
+                    <h3>📋 Реестр 1С (список заказов)</h3>
+                </div>
+
+                <div class="panel-body">
+                    <div class="upload-area text-upload-area">
+                        <p class="area-desc">
+                            Вставьте список номеров заказов из 1С
+                        </p>
+
+                        <textarea
+                            id="reestrText"
+                            class="orders-text"
+                            placeholder="Вставьте сюда номера заказов...
+
+67893508-0017-1
+78710946-0080-1
+88923019-0088-1"
+                            spellcheck="false"
+                        ></textarea>
+                                               <p class="hint">
+                            Вставьте данные из столбика <strong>Телефон1</strong>.
+                                                </p>
+                    </div>
+
+                    <div id="reestrStatus" class="status"></div>
+                </div>
+            </div>
+
+            <!-- Плашка 2: Отменённые заказы из ЛК -->
+            <div class="panel postings-panel">
+                <div class="panel-header">
+                    <h3>🚫 Отменённые заказы из ЛК Ozon</h3>
+                </div>
+
+                <div class="panel-body">
+                    <div class="upload-area text-upload-area">
+                        <p class="area-desc">
+Файл со списком отмененных заказов можно скачать во вкладке <strong>Отменены</strong>. Обязательно поставьте фильтр по нужному складу, сверху нажмите  <strong>Действие</strong> и <strong>Скачать список заказов</strong>.                                  Скопируйте номера из столбика <strong>Номер отправления</strong>.
+                        </p>
+                        <textarea
+                            id="postingsText"
+                            class="orders-text"
+                            placeholder="Вставьте сюда номера отправлений...
+
+| 67893508-0017-1 |
+| 78710946-0080-1 |
+| 88923019-0088-1 |"
+                            spellcheck="false"
+                        ></textarea>
+                     </div>
+
+                    <div id="postingsStatus" class="status"></div>
+                </div>
+            </div>
+
+        </div>
+
+        <button class="start-btn" onclick="startSverka()" id="startBtn">
+            СРАВНИТЬ
+        </button>
+
+        <div id="progressSection" class="progress-section hidden">
+            <div class="progress-stats">
+                <span id="progressText">Обработка...</span>
+                <span id="progressPercent">0%</span>
+            </div>
+
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+
+            <div class="progress-details" id="progressDetails"></div>
+        </div>
+
+        <div id="resultsSection" class="results-section hidden">
+            <h3>🚫 Номера из реестра 1С, отменённые в ЛК</h3>
+
+            <div class="summary" id="summary"></div>
+
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="col-num">№</th>
+                            <th>Номер отправления (Телефон1)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsBody"></tbody>
+                </table>
+            </div>
+
+            <div class="result-actions">
+                <button class="export-btn" onclick="copyList(this)">
+                    📋 Копировать список
+                </button>
+                <button class="export-btn" onclick="exportCSV()">
+                    📥 Скачать CSV
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js?v=2"></script>
+    <script src="../../../assets/audio.js?v=4"></script>
+    <script src="../../../assets/themes.js"></script>
+    <script src="../../../assets/theme.js"></script>
+</body>
+</html>

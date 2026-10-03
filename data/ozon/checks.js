@@ -5,5 +5,12 @@ const ozonChecks = [
         path: 'data/ozon/list-reestr/index.html'
     },
     
+{
+        id: 'otmenennye-zakazy',
+        title: 'Сверка реестра 1С и отменённых заказов',
+        path: 'data/ozon/otmenennye-zakazy/index.html'
+    },
+
    
 ];
+

@@ -1,4320 +1,1194 @@
-'use strict';
+/* ===== Подпись этикеток — поток: реестр 1С + этикетки PDF + прайс + список заказов ЛК =====
+   Из реестра 1С берутся только заказы, где «Количество» = 1 (столбцы «Идентификатор МП» и «Количество»).
+   В PDF остаются только этикетки этих заказов, остальные удаляются (список с причинами — внизу страницы).
+   Артикулы (SKU) берутся из списка заказов ЛК, названия — из прайса.
+   Этикетки подписываются и сортируются по алфавиту по наименованию. */
 
-/* =========================================================
-   СОСТОЯНИЕ
-========================================================= */
+const PDFJS_WORKER_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+const TESSERACT_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+const OCR_LANG = 'eng';
 
 const state = {
-    oneC: [],
-    lk: [],
-    priceMap: new Map(),
-
-    mapping: new Map(),
-
+    reestr: null,   // { name, orders: Map(orderId -> qty), qty1: Set(orderId) }
+    labels: null,   // { name, file }
+    price: null,    // { name, map: { sku -> name } }
+    lk: null,       // { name, map: Map(orderId -> sku) }
+    exportRows: [],
     pdfFile: null,
-
-    lastOutputPdf: null,
-    lastOrdersXlsx: null,
-
-    processedPages: [],
-
-    manualExcluded: new Set(),
-
+    previewScale: 1,
+    pageRotation: 0,
+    visualW: 0,
+    visualH: 0,
     fontBytes: null,
     fontSource: null,
     fontkitSource: null,
-
-    textConfig: {
-        fontSize: 5,
-        color: '#000000'
-    }
+    textConfig: { fontSize: 5, color: '#000000' }
 };
 
+let previewFontFamily = 'Arial, sans-serif';
+let clientPdfDoc = null;
+let textCanvas = null;
+
+// Защита: не даём случайно закрыть/обновить страницу во время обработки
 let processingActive = false;
-
-
-/* =========================================================
-   OCR
-========================================================= */
-
-const OCR_SCALE = 1.0;
-const OCR_LANG = 'eng';
-const OCR_WORKERS = 3;
-
-
-/* =========================================================
-   ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
-========================================================= */
-
-function log(message) {
-    const logEl =
-        document.getElementById('log');
-
-    if (!logEl) return;
-
-    const time =
-        new Date().toLocaleTimeString();
-
-    logEl.textContent +=
-        `[${time}] ${message}\n`;
-
-    logEl.scrollTop =
-        logEl.scrollHeight;
-}
-
-
-function setStatus(
-    title,
-    progress = null
-) {
-    const box =
-        document.getElementById('statusBox');
-
-    const titleEl =
-        document.getElementById('statusTitle');
-
-    const bar =
-        document.getElementById('progressBar');
-
-    if (box) {
-        box.classList.add('show');
+window.addEventListener('beforeunload', (e) => {
+    if (processingActive) {
+        e.preventDefault();
+        e.returnValue = '';
     }
+});
 
-    if (titleEl) {
-        titleEl.textContent = title;
-    }
-
-    if (
-        bar &&
-        progress !== null
-    ) {
-        const value =
-            Math.max(
-                0,
-                Math.min(
-                    100,
-                    Number(progress)
-                )
-            );
-
-        bar.style.width =
-            value + '%';
-    }
-}
-
-
-function clearStatus() {
-    const box =
-        document.getElementById('statusBox');
-
-    const logEl =
-        document.getElementById('log');
-
-    const bar =
-        document.getElementById('progressBar');
-
-    const unknownBox =
-        document.getElementById('unknownOrdersBox');
-
-    if (unknownBox) {
-        unknownBox.remove();
-    }
-
-    if (box) {
-        box.classList.remove('show');
-    }
-
-    if (logEl) {
-        logEl.textContent = '';
-    }
-
-    if (bar) {
-        bar.style.width = '0%';
-    }
-}
-
-
-function normalizeHeader(value) {
-    return String(value ?? '')
-        .replace(/\u00A0/g, ' ')
-        .trim()
+// ===== Утилиты =====
+function normalizeHeader(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/[\u00A0\u2007\u202F\u2009\u200A\u205F]/g, ' ')
         .replace(/\s+/g, ' ')
+        .trim()
         .toLowerCase();
 }
-
-
-/* =========================================================
-   НАУЧНАЯ ЗАПИСЬ
-========================================================= */
-
-function expandScientific(value) {
-    let s =
-        String(value)
-            .trim()
-            .replace(',', '.');
-
-    const match =
-        s.match(
-            /^([+-]?)(\d+)(?:\.(\d+))?[eE]([+-]?\d+)$/
-        );
-
-    if (!match) {
-        return s;
-    }
-
-    const sign =
-        match[1] || '';
-
-    const integerPart =
-        match[2] || '';
-
-    const fractionPart =
-        match[3] || '';
-
-    const exponent =
-        parseInt(
-            match[4],
-            10
-        );
-
-    const digits =
-        integerPart +
-        fractionPart;
-
-    const decimalPosition =
-        integerPart.length +
-        exponent;
-
-    let result;
-
-    if (
-        decimalPosition <= 0
-    ) {
-        result =
-            '0.' +
-            '0'.repeat(
-                -decimalPosition
-            ) +
-            digits;
-
-    } else if (
-        decimalPosition >=
-        digits.length
-    ) {
-        result =
-            digits +
-            '0'.repeat(
-                decimalPosition -
-                digits.length
-            );
-
-    } else {
-        result =
-            digits.slice(
-                0,
-                decimalPosition
-            ) +
-            '.' +
-            digits.slice(
-                decimalPosition
-            );
-    }
-
-    if (
-        result.includes('.')
-    ) {
-        result =
-            result
-                .replace(
-                    /0+$/,
-                    ''
-                )
-                .replace(
-                    /\.$/,
-                    ''
-                );
-    }
-
-    return sign + result;
-}
-
-
-/* =========================================================
-   SKU
-========================================================= */
-
-function normalizeSku(value) {
-    if (
-        value === null ||
-        value === undefined
-    ) {
-        return '';
-    }
-
-    let s =
-        String(value)
-            .replace(
-                /\u00A0/g,
-                ' '
-            )
-            .trim();
-
-    if (!s) {
-        return '';
-    }
-
-    s =
-        s.replace(
-            /\s+/g,
-            ''
-        );
-
-    if (
-        /^[+-]?\d+(?:[.,]\d+)?e[+-]?\d+$/i
-            .test(s)
-    ) {
-        s =
-            expandScientific(s);
-    }
-
-    s =
-        s.replace(
-            /\.0+$/,
-            ''
-        );
-
-    return s
-        .replace(
-            /[^\dA-Za-zА-Яа-я_-]/g,
-            ''
-        )
-        .toLowerCase();
-}
-
-
-/* =========================================================
-   НОМЕР ЗАКАЗА
-========================================================= */
 
 function normalizeOrderId(value) {
-    if (
-        value === null ||
-        value === undefined
-    ) {
-        return '';
-    }
-
-    let s =
-        String(value)
-            .replace(
-                /\u00A0/g,
-                ' '
-            )
-            .trim();
-
-    if (!s) {
-        return '';
-    }
-
-    s =
-        s.replace(
-            /^['"]|['"]$/g,
-            ''
-        );
-
-    if (
-        /^[+-]?\d+(?:[.,]\d+)?e[+-]?\d+$/i
-            .test(s)
-    ) {
-        s =
-            expandScientific(s);
-    }
-
-    if (
-        /^\d+\.0+$/.test(s)
-    ) {
-        s =
-            s.replace(
-                /\.0+$/,
-                ''
-            );
-    }
-
-    s =
-        s.replace(
-            /[^\d]/g,
-            ''
-        );
-
-    s =
-        s.replace(
-            /^0+/,
-            ''
-        );
-
-    return s;
+    if (value === null || value === undefined) return '';
+    let s = String(value).trim();
+    if (/^\d+\.0+$/.test(s)) s = s.replace(/\.0+$/, '');
+    return s.replace(/[\s\u00A0\u2007\u202F\u2009\u200A\u205F\u3000]/g, '');
 }
 
-
-/* =========================================================
-   EXCEL
-========================================================= */
-
-async function readExcelFile(file) {
-    const buffer =
-        await file.arrayBuffer();
-
-    const workbook =
-        XLSX.read(
-            buffer,
-            {
-                type: 'array',
-                cellDates: false,
-                raw: false,
-                cellNF: false,
-                cellText: true
-            }
-        );
-
-    return workbook;
+function normalizeSku(value) {
+    if (value === null || value === undefined) return '';
+    let s = String(value);
+    if (s.endsWith('.0')) s = s.slice(0, -2);
+    return s.replace(/[\s\u00A0\u2007\u202F\u2009\u200A\u205F\u3000]/g, '').toLowerCase();
 }
 
+function parseNum(value) {
+    if (value === null || value === undefined || value === '') return null;
+    const n = parseFloat(String(value).replace(/\s/g, '').replace(',', '.'));
+    return isNaN(n) ? null : n;
+}
 
-function getAllSheetsRows(workbook) {
-    const result = [];
+function fmtQty(q) {
+    return Number.isInteger(q) ? String(q) : String(Math.round(q * 100) / 100);
+}
 
-    if (
-        !workbook ||
-        !workbook.SheetNames ||
-        !workbook.SheetNames.length
-    ) {
-        throw new Error(
-            'В Excel-файле нет листов.'
-        );
+/* ===== Сжатие PDF без потери качества: удаление дубликатов объектов =====
+   Если исходный файл содержит по копии одного и того же тяжёлого объекта
+   на каждую этикетку (эмблема маркетплейса и т.п.), оставляем первый
+   экземпляр и переносим все ссылки на него. Рендеринг не меняется ни на
+   бит. Проверки типов — «утиные»: не зависят от экспорта классов pdf-lib. */
+
+function pdfIsRef(v) {
+    return !!(PDFLib.PDFRef && v instanceof PDFLib.PDFRef);
+}
+function pdfIsStream(o) {
+    return !!(o && o.dict && o.contents instanceof Uint8Array);
+}
+function pdfIsDict(o) {
+    return !!(o && typeof o.entries === 'function' && typeof o.set === 'function' && !(o.contents instanceof Uint8Array));
+}
+function pdfIsArray(o) {
+    return !!(o && typeof o.size === 'function' && typeof o.get === 'function' &&
+              typeof o.set === 'function' && typeof o.entries !== 'function');
+}
+
+function pdfHashBytes(u8) {
+    // двойная свёртка: быстрая и практически без коллизий,
+    // при совпадении хэша содержимое сверяется целиком
+    let h1 = 0x811c9dc5, h2 = 0x01000193;
+    for (let i = 0; i < u8.length; i++) {
+        h1 = Math.imul((h1 ^ u8[i]) >>> 0, 16777619) >>> 0;
+        h2 = (h2 + Math.imul(u8[i], i % 7 + 1)) >>> 0;
     }
+    return u8.length + ':' + h1.toString(36) + h2.toString(36);
+}
 
-    for (
-        const sheetName
-        of workbook.SheetNames
-    ) {
-        const sheet =
-            workbook.Sheets[
-                sheetName
-            ];
+function pdfSameBytes(a, b) {
+    if (!a || !b || a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+    return true;
+}
 
-        if (!sheet) {
-            continue;
+/* Хэш объекта ПО СОДЕРЖИМОМУ (номера объектов не участвуют): два
+   одинаковых объекта с разными номерами получают одинаковый хэш. */
+function pdfContentHash(ctx, obj, memo, inProgress) {
+    if (pdfIsRef(obj)) {
+        const num = obj.number();
+        if (memo.has(num)) return memo.get(num);
+        if (inProgress.has(num)) return '~c';
+        inProgress.add(num);
+        const h = pdfContentHash(ctx, ctx.lookup(obj), memo, inProgress);
+        inProgress.delete(num);
+        memo.set(num, h);
+        return h;
+    }
+    if (pdfIsStream(obj)) {
+        const dictH = pdfContentHash(ctx, obj.dict, memo, inProgress);
+        return 'S[' + pdfHashBytes(obj.contents) + '|' + dictH + ']';
+    }
+    if (pdfIsDict(obj)) {
+        const parts = [];
+        for (const [k, v] of obj.entries()) {
+            parts.push(k.toString() + '=' + pdfContentHash(ctx, v, memo, inProgress));
         }
+        parts.sort();
+        return 'D{' + parts.join(';') + '}';
+    }
+    if (pdfIsArray(obj)) {
+        const parts = [];
+        for (let i = 0; i < obj.size(); i++) {
+            parts.push(pdfContentHash(ctx, obj.get(i), memo, inProgress));
+        }
+        return 'A[' + parts.join(',') + ']';
+    }
+    try { return 'P' + obj.toString(); } catch (e) { return 'P?'; }
+}
 
-        const rows =
-            XLSX.utils.sheet_to_json(
-                sheet,
-                {
-                    header: 1,
-                    raw: false,
-                    defval: ''
+/* Возвращает число убранных дубликатов-потоков. */
+function dedupePdfObjects(pdfDoc) {
+    try {
+        const ctx = pdfDoc.context;
+        const objects = ctx.enumerateIndirectObjects();
+        const byHash = new Map();    // хэш содержимого -> первая ссылка
+        const dupToOrig = new Map(); // ссылка дубликата -> ссылка оригинала
+
+        for (const [ref, obj] of objects) {
+            if (!pdfIsStream(obj)) continue;            // тяжёлое — только потоки
+            const bytes = obj.contents;
+            if (!bytes || bytes.length < 1024) continue; // мелочь не ищем
+            const h = pdfContentHash(ctx, obj, new Map(), new Set());
+            const first = byHash.get(h);
+            if (first === undefined) { byHash.set(h, ref); continue; }
+            // страховка от коллизий: сверяем содержимое целиком
+            const a = ctx.lookup(first);
+            if (pdfIsStream(a) && pdfSameBytes(a.contents, bytes)) {
+                dupToOrig.set(ref, first);
+            }
+        }
+        if (!dupToOrig.size) return 0;
+
+        // переносим все ссылки на дубликаты к оригиналам
+        const visit = (obj, seen) => {
+            if (!obj || typeof obj !== 'object' || seen.has(obj)) return;
+            seen.add(obj);
+            if (pdfIsDict(obj)) {
+                for (const [k, v] of obj.entries()) {
+                    if (pdfIsRef(v) && dupToOrig.has(v)) obj.set(k, dupToOrig.get(v));
+                    else if (v && typeof v === 'object') visit(v, seen);
                 }
-            );
-
-        result.push({
-            sheetName,
-            rows
-        });
-    }
-
-    return result;
-}
-
-
-function getFirstSheetRows(workbook) {
-    const sheets =
-        getAllSheetsRows(
-            workbook
-        );
-
-    if (!sheets.length) {
-        throw new Error(
-            'Не удалось прочитать Excel-файл.'
-        );
-    }
-
-    return sheets[0].rows;
-}
-
-
-/* =========================================================
-   ПОИСК СТРОКИ ЗАГОЛОВКОВ
-========================================================= */
-
-function findHeaderRow(
-    rows,
-    requiredHeaders
-) {
-    const wanted =
-        requiredHeaders.map(
-            normalizeHeader
-        );
-
-    const limit =
-        Math.min(
-            rows.length,
-            100
-        );
-
-    for (
-        let r = 0;
-        r < limit;
-        r++
-    ) {
-        const row =
-            rows[r] || [];
-
-        const normalized =
-            row.map(
-                normalizeHeader
-            );
-
-        const found =
-            wanted.every(
-                header =>
-                    normalized.includes(
-                        header
-                    )
-            );
-
-        if (found) {
-            return {
-                index: r,
-                headers: normalized
-            };
-        }
-    }
-
-    return null;
-}
-
-
-/* =========================================================
-   1С
-========================================================= */
-
-function parseOneC(rows) {
-    const headerInfo =
-        findHeaderRow(
-            rows,
-            [
-                'Идентификатор МП',
-                'Количество'
-            ]
-        );
-
-    if (!headerInfo) {
-        throw new Error(
-            'В файле 1С не найдена строка с заголовками "Идентификатор МП" и "Количество".'
-        );
-    }
-
-    const headers =
-        headerInfo.headers;
-
-    const mpIndex =
-        headers.indexOf(
-            normalizeHeader(
-                'Идентификатор МП'
-            )
-        );
-
-    const quantityIndex =
-        headers.indexOf(
-            normalizeHeader(
-                'Количество'
-            )
-        );
-
-    const result = [];
-
-    for (
-        let r =
-            headerInfo.index + 1;
-        r < rows.length;
-        r++
-    ) {
-        const row =
-            rows[r] || [];
-
-        const orderId =
-            normalizeOrderId(
-                row[mpIndex]
-            );
-
-        if (!orderId) {
-            continue;
-        }
-
-        const quantity =
-            parseQuantity(
-                row[quantityIndex]
-            );
-
-        result.push({
-            orderId,
-            quantity,
-            sourceRow:
-                r + 1
-        });
-    }
-
-    return result;
-}
-
-
-function parseQuantity(value) {
-    if (
-        value === null ||
-        value === undefined ||
-        String(value).trim() === ''
-    ) {
-        return 1;
-    }
-
-    const s =
-        String(value)
-            .trim()
-            .replace(',', '.');
-
-    const number =
-        Number(s);
-
-    if (
-        !Number.isFinite(number)
-    ) {
-        return 1;
-    }
-
-    return number;
-}
-
-
-/* =========================================================
-   ЛК
-========================================================= */
-
-function extractOrderIdFromCell(value) {
-    if (
-        value === null ||
-        value === undefined
-    ) {
-        return '';
-    }
-
-    const raw =
-        String(value)
-            .replace(
-                /\u00A0/g,
-                ' '
-            )
-            .trim();
-
-    if (!raw) {
-        return '';
-    }
-
-    const direct =
-        normalizeOrderId(raw);
-
-    if (
-        direct.length >= 6
-    ) {
-        return direct;
-    }
-
-    const scientificMatches =
-        raw.match(
-            /[+-]?\d+(?:[.,]\d+)?e[+-]?\d+/gi
-        );
-
-    if (scientificMatches) {
-        for (
-            const candidate
-            of scientificMatches
-        ) {
-            const id =
-                normalizeOrderId(
-                    candidate
-                );
-
-            if (
-                id.length >= 6
-            ) {
-                return id;
-            }
-        }
-    }
-
-    const digitGroups =
-        raw.match(
-            /\d{6,}/g
-        );
-
-    if (
-        digitGroups?.length
-    ) {
-        for (
-            const group
-            of digitGroups
-        ) {
-            const id =
-                normalizeOrderId(
-                    group
-                );
-
-            if (
-                id.length >= 6
-            ) {
-                return id;
-            }
-        }
-    }
-
-    return '';
-}
-
-
-function findMatchingOneCOrder(
-    cellValue,
-    oneCIds
-) {
-    const raw =
-        String(
-            cellValue ?? ''
-        )
-            .replace(
-                /\u00A0/g,
-                ' '
-            )
-            .trim();
-
-    if (!raw) {
-        return null;
-    }
-
-    const normalized =
-        normalizeOrderId(raw);
-
-    if (
-        normalized &&
-        oneCIds.has(normalized)
-    ) {
-        return normalized;
-    }
-
-    const scientific =
-        raw.match(
-            /[+-]?\d+(?:[.,]\d+)?e[+-]?\d+/gi
-        );
-
-    if (scientific) {
-        for (
-            const value
-            of scientific
-        ) {
-            const id =
-                normalizeOrderId(
-                    value
-                );
-
-            if (
-                id &&
-                oneCIds.has(id)
-            ) {
-                return id;
-            }
-        }
-    }
-
-    const groups =
-        raw.match(
-            /\d{6,}/g
-        );
-
-    if (groups) {
-        for (
-            const group
-            of groups
-        ) {
-            const id =
-                normalizeOrderId(
-                    group
-                );
-
-            if (
-                id &&
-                oneCIds.has(id)
-            ) {
-                return id;
-            }
-        }
-    }
-
-    return null;
-}
-
-
-/*
- * Читаем реальные ячейки Excel.
- */
-function scanLKForOrders(
-    workbook,
-    oneC
-) {
-    const oneCIds =
-        new Set(
-            oneC.map(
-                item =>
-                    normalizeOrderId(
-                        item.orderId
-                    )
-            )
-        );
-
-    const found =
-        new Map();
-
-    for (
-        const sheetName
-        of workbook.SheetNames
-    ) {
-        const sheet =
-            workbook.Sheets[
-                sheetName
-            ];
-
-        if (!sheet) {
-            continue;
-        }
-
-        const cells =
-            Object.entries(sheet)
-                .filter(
-                    ([key, cell]) =>
-                        /^[A-Z]+[0-9]+$/.test(key) &&
-                        cell
-                );
-
-        const rows =
-            new Map();
-
-        for (
-            const [address, cell]
-            of cells
-        ) {
-            const pos =
-                XLSX.utils.decode_cell(
-                    address
-                );
-
-            if (
-                !rows.has(pos.r)
-            ) {
-                rows.set(
-                    pos.r,
-                    []
-                );
-            }
-
-            rows.get(pos.r)[pos.c] =
-                cell.v ?? '';
-        }
-
-        for (
-            const [address, cell]
-            of cells
-        ) {
-            const candidates = [
-                cell.v,
-                cell.w
-            ];
-
-            let orderId = null;
-
-            for (
-                const candidate
-                of candidates
-            ) {
-                orderId =
-                    findMatchingOneCOrder(
-                        candidate,
-                        oneCIds
-                    );
-
-                if (orderId) {
-                    break;
+            } else if (pdfIsArray(obj)) {
+                for (let i = 0; i < obj.size(); i++) {
+                    const v = obj.get(i);
+                    if (pdfIsRef(v) && dupToOrig.has(v)) obj.set(i, dupToOrig.get(v));
+                    else if (v && typeof v === 'object') visit(v, seen);
                 }
             }
-
-            if (!orderId) {
-                continue;
-            }
-
-            const pos =
-                XLSX.utils.decode_cell(
-                    address
-                );
-
-            if (
-                !found.has(orderId)
-            ) {
-                found.set(
-                    orderId,
-                    []
-                );
-            }
-
-            found.get(orderId).push({
-                sheetName,
-                rowIndex: pos.r,
-                columnIndex: pos.c,
-                row:
-                    rows.get(pos.r) ||
-                    []
-            });
-        }
+        };
+        for (const [, obj] of objects) visit(obj, new Set());
+        for (const ref of dupToOrig.keys()) ctx.delete(ref);
+        return dupToOrig.size;
+    } catch (e) {
+        console.warn('Сжатие PDF не удалось (файл сохранён без сжатия):', e);
+        return 0;
     }
-
-    return found;
 }
 
-
-/* =========================================================
-   ПОИСК SKU В СТРОКЕ ЛК
-========================================================= */
-
-function findSkusInRow(
-    row,
-    priceMap
-) {
-    const result = [];
-
-    for (
-        let c = 0;
-        c < row.length;
-        c++
-    ) {
-        const value =
-            row[c];
-
-        if (
-            value === null ||
-            value === undefined ||
-            String(value).trim() === ''
-        ) {
-            continue;
-        }
-
-        const sku =
-            normalizeSku(value);
-
-        if (!sku) {
-            continue;
-        }
-
-        if (
-            priceMap.has(sku) &&
-            !result.includes(sku)
-        ) {
-            result.push(sku);
-        }
-    }
-
-    return result;
+function normalizeAngle(a) {
+    const r = ((Number(a) || 0) % 360 + 360) % 360;
+    return [0, 90, 180, 270].includes(r) ? r : 0;
 }
 
+function loadScript(src) {
+    return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = src;
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+    });
+}
 
-/* =========================================================
-   ПРАЙС
-========================================================= */
+function escapeHtml(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
 
-function parsePrice(rows) {
-    const map =
-        new Map();
+// ===== Позиционирование текста — как в рабочем коде (add_name_and_rename.py) =====
+function pythonPlacement(rot, mw, mh) {
+    if (rot === 90)  return { x: mw - 2, y: 0 };
+    if (rot === 270) return { x: 5,     y: mh - 1 };
+    if (rot === 180) return { x: mw - 10, y: mh - 1 };
+    return { x: 5, y: 1 };
+}
 
-    for (
-        let r = 0;
-        r < rows.length;
-        r++
-    ) {
-        const row =
-            rows[r] || [];
+function pageToVisual(rot, mw, mh, px, py) {
+    switch (rot) {
+        case 90:  return { x: py, y: px };
+        case 180: return { x: mw - px, y: py };
+        case 270: return { x: mh - py, y: px };
+        default:  return { x: px, y: mh - py };
+    }
+}
 
-        if (
-            row.length < 2
-        ) {
-            continue;
+function pageDeltaToVisual(rot, dx, dy) {
+    switch (rot) {
+        case 90:  return { x: dy, y: dx };
+        case 180: return { x: -dx, y: dy };
+        case 270: return { x: -dy, y: dx };
+        default:  return { x: dx, y: -dy };
+    }
+}
+
+/* Текст всегда рисуется с поворотом 90° (базовая линия идёт в +y страницы,
+   выносные вверх — в −x, вниз — в +x). Подбираем максимальный размер,
+   при котором название целиком помещается в строку на этикетке. */
+function fitTextLayout(measureWidth, text, mw, mh, x, y, maxSize) {
+    const TOP_M = 2;           // не упираться в дальний край строки
+    const ASC_RATIO = 0.95;    // высота букв над базовой линией (DejaVu Bold, с запасом)
+    const DESC_RATIO = 0.27;   // выносные элементы вниз (у, р, д, щ…)
+    const MIN_SIZE = 3;
+
+    const run = Math.max(mh - y - TOP_M, 20);       // длина строки от точки старта
+    const ascRoom = Math.max(x - 0.3, 2);           // место вверх до края
+    const descRoom = Math.max(mw - x - 0.5, 1);     // место вниз до края
+
+    let size = maxSize;
+    const w = measureWidth(text, maxSize);
+    if (w > run) size = maxSize * run / w;
+    size = Math.min(size, ascRoom / ASC_RATIO);
+
+    // если выносным вниз не хватает места — приподнимаем базовую линию (сдвиг в −x),
+    // но не выше, чем позволяет запас сверху
+    let shift = Math.max(0, DESC_RATIO * size - descRoom);
+    shift = Math.min(shift, Math.max(0, x - 0.3 - ASC_RATIO * size));
+    return { size: Math.max(Math.min(MIN_SIZE, maxSize), Math.floor(size * 10) / 10), shift };
+}
+
+// ===== Чтение Excel =====
+/* Файлы из ЛК Яндекса содержат неверную запись <dimension> (например A1:N2 при 97 строках данных),
+   из-за чего SheetJS видит только заголовки. Пересчитываем диапазон по фактическим ячейкам. */
+function fixSheetRange(wb) {
+    wb.SheetNames.forEach(name => {
+        const ws = wb.Sheets[name];
+        if (!ws) return;
+        let minR = Infinity, minC = Infinity, maxR = -1, maxC = -1;
+        Object.keys(ws).forEach(k => {
+            if (k.charAt(0) === '!' || !Object.prototype.hasOwnProperty.call(ws, k)) return;
+            const cell = ws[k];
+            if (!cell || (cell.v === undefined && cell.t === undefined)) return;
+            const { r, c } = XLSX.utils.decode_cell(k);
+            if (r < minR) minR = r;
+            if (c < minC) minC = c;
+            if (r > maxR) maxR = r;
+            if (c > maxC) maxC = c;
+        });
+        if (maxR >= 0) {
+            ws['!ref'] = XLSX.utils.encode_range({ s: { r: minR, c: minC }, e: { r: maxR, c: maxC } });
         }
+    });
+}
 
-        const sku =
-            normalizeSku(
-                row[0]
-            );
+async function readWorkbook(file) {
+    const buf = new Uint8Array(await file.arrayBuffer());
+    const wb = XLSX.read(buf, { type: 'array' });
+    fixSheetRange(wb);
+    return wb;
+}
 
-        const name =
-            String(
-                row[1] ?? ''
-            )
-                .replace(
-                    /\u00A0/g,
-                    ' '
-                )
-                .trim();
+function firstSheetRows(wb) {
+    return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '', blankrows: false });
+}
 
-        if (
-            !sku ||
-            !name
-        ) {
-            continue;
-        }
-
-        map.set(
-            sku,
-            name
-        );
+/* Реестр 1С: любая структура файла, ищем строку заголовков со столбцами
+   «Идентификатор МП» и «Количество», ниже — данные. */
+function parseReestr(rows) {
+    let hdr = -1, idCol = -1, qtyCol = -1;
+    const limit = Math.min(rows.length, 40);
+    for (let i = 0; i < limit; i++) {
+        const cells = (rows[i] || []).map(normalizeHeader);
+        let ic = cells.findIndex(c => c.includes('идентификатор') && c.replace(/[^а-яa-z ]/g, '').includes('мп'));
+        const qc = cells.findIndex(c => c.replace(/[^а-яa-z]/g, '').startsWith('количество'));
+        if (ic >= 0 && qc >= 0) { hdr = i; idCol = ic; qtyCol = qc; break; }
+    }
+    if (hdr < 0) {
+        throw new Error('Не найдены столбцы «Идентификатор МП» и «Количество». Проверьте, что это реестр 1С с заказами.');
     }
 
+    const orders = new Map();
+    const rowCount = new Map(); // сколько строк с этим заказом (для поиска дублей)
+    for (let i = hdr + 1; i < rows.length; i++) {
+        const r = rows[i] || [];
+        const id = normalizeOrderId(r[idCol]);
+        if (!id || !/\d/.test(id)) continue;
+        let qty = parseNum(r[qtyCol]);
+        if (qty === null) qty = 1;
+        rowCount.set(id, (rowCount.get(id) || 0) + 1);
+        if (!orders.has(id)) orders.set(id, qty);
+    }
+    if (!orders.size) throw new Error('В реестре не найдено ни одного заказа (столбец «Идентификатор МП» пустой).');
+
+    const dups = [];
+    rowCount.forEach((count, id) => { if (count > 1) dups.push(id); });
+
+    const qty1 = new Set();
+    orders.forEach((q, id) => { if (q === 1) qty1.add(id); });
+    return { orders, qty1, dups };
+}
+
+/* Список заказов из ЛК: «Номер заказа» + «SKU». В одном заказе может быть
+   несколько товаров — сохраняем ВСЕ артикулы заказа (без повторов). */
+function parseLk(rows) {
+    let hdr = -1, orderCol = -1, skuCol = -1;
+    const limit = Math.min(rows.length, 40);
+    for (let i = 0; i < limit; i++) {
+        const cells = (rows[i] || []).map(normalizeHeader);
+        const oc = cells.findIndex(c => c === 'номер заказа');
+        const sc = cells.findIndex(c => c === 'ваш sku' || c.includes('sku') || c.includes('артикул'));
+        if (oc >= 0 && sc >= 0) { hdr = i; orderCol = oc; skuCol = sc; break; }
+    }
+    if (hdr < 0) {
+        // запасной вариант: «Ваш номер заказа»
+        for (let i = 0; i < limit; i++) {
+            const cells = (rows[i] || []).map(normalizeHeader);
+            const oc = cells.findIndex(c => c.includes('номер заказа'));
+            const sc = cells.findIndex(c => c.includes('sku') || c.includes('артикул'));
+            if (oc >= 0 && sc >= 0) { hdr = i; orderCol = oc; skuCol = sc; break; }
+        }
+    }
+    if (hdr < 0) throw new Error('Не найдены столбцы «Номер заказа» и «SKU». Проверьте, что это список заказов из ЛК.');
+
+    const map = new Map();
+    let itemCount = 0;
+    for (let i = hdr + 1; i < rows.length; i++) {
+        const r = rows[i] || [];
+        const id = normalizeOrderId(r[orderCol]);
+        if (!id || !/\d/.test(id)) continue;
+        const sku = normalizeSku(r[skuCol]);
+        if (!sku) continue;
+        let list = map.get(id);
+        if (!list) { list = []; map.set(id, list); }
+        if (!list.includes(sku)) { list.push(sku); itemCount++; }
+    }
+    if (!map.size) throw new Error('В списке заказов из ЛК не найдено ни одного заказа.');
+    map.itemCount = itemCount;
     return map;
 }
 
-
-/* =========================================================
-   ПОСТРОЕНИЕ СВЯЗКИ
-========================================================= */
-
-function buildMapping(
-    oneC,
-    lkWorkbook,
-    priceMap
-) {
-    const mapping =
-        new Map();
-
-    const foundOrders =
-        scanLKForOrders(
-            lkWorkbook,
-            oneC
-        );
-
-    log(
-        `В ЛК просканирован весь файл: найдено совпадений по заказам — ${foundOrders.size}.`
-    );
-
-    for (
-        const oneCRow
-        of oneC
-    ) {
-        const orderId =
-            oneCRow.orderId;
-
-        const matches =
-            foundOrders.get(
-                orderId
-            );
-
-        if (
-            !matches ||
-            !matches.length
-        ) {
-            mapping.set(
-                orderId,
-                {
-                    orderId,
-                    quantity:
-                        oneCRow.quantity,
-                    status:
-                        'LK_NOT_FOUND',
-                    skus: [],
-                    productNames: [],
-                    sku: '',
-                    productName: '',
-                    reason:
-                        'Номер заказа не найден во всём файле ЛК'
-                }
-            );
-
-            continue;
+/* Прайс: первый непустой столбец — артикул, следующий непустой — название. */
+function parsePrice(rows) {
+    const map = {};
+    for (const row of rows) {
+        if (!row || !row.length) continue;
+        let rawSku = null;
+        for (let c = 0; c < Math.min(row.length, 5); c++) {
+            if (row[c] !== '' && row[c] !== null && row[c] !== undefined) { rawSku = row[c]; break; }
         }
-
-        const skuSet =
-            new Set();
-
-        for (
-            const match
-            of matches
-        ) {
-            const skus =
-                findSkusInRow(
-                    match.row,
-                    priceMap
-                );
-
-            for (
-                const sku
-                of skus
-            ) {
-                skuSet.add(sku);
-            }
+        if (rawSku === null) continue;
+        let name = '';
+        for (let c = 0; c < row.length; c++) {
+            const cell = String(row[c] || '').trim();
+            if (cell && cell !== String(rawSku)) { name = cell; break; }
         }
-
-        const skus =
-            [...skuSet];
-
-        if (!skus.length) {
-            mapping.set(
-                orderId,
-                {
-                    orderId,
-                    quantity:
-                        oneCRow.quantity,
-                    status:
-                        'SKU_NOT_FOUND',
-                    skus: [],
-                    productNames: [],
-                    sku: '',
-                    productName: '',
-                    reason:
-                        'Для найденного заказа не найден SKU, присутствующий в прайсе'
-                }
-            );
-
-            continue;
-        }
-
-        const productNames =
-            skus.map(
-                sku =>
-                    priceMap.get(
-                        sku
-                    ) || ''
-            );
-
-        const combinedProductName =
-            productNames
-                .filter(Boolean)
-                .join(' / ');
-
-        mapping.set(
-            orderId,
-            {
-                orderId,
-                quantity:
-                    oneCRow.quantity,
-
-                status:
-                    'FOUND',
-
-                skus,
-
-                productNames,
-
-                sku:
-                    skus.join(', '),
-
-                productName:
-                    combinedProductName,
-
-                reason:
-                    Number(
-                        oneCRow.quantity
-                    ) > 1
-                        ? 'Количество больше 1 — в PDF не включается'
-                        : ''
-            }
-        );
+        if (!name) continue;
+        const sku = normalizeSku(rawSku);
+        if (sku) map[sku] = name;
     }
-
-    return mapping;
+    return map;
 }
 
+// ===== Зоны загрузки =====
+const ZONES = [
+    { key: 'reestr', zone: 'reestrDropZone', input: 'reestrInput', stats: 'reestrStats', reset: 'reestrReset', handler: handleReestrFile },
+    { key: 'labels', zone: 'labelsDropZone', input: 'labelsInput', stats: 'labelsStats', reset: 'labelsReset', handler: handleLabelsFile },
+    { key: 'price',  zone: 'priceDropZone',  input: 'priceInput',  stats: 'priceStats',  reset: 'priceReset',  handler: handlePriceFile },
+    { key: 'lk',     zone: 'lkDropZone',     input: 'lkInput',     stats: 'lkStats',     reset: 'lkReset',     handler: handleLkFile }
+];
+const zoneHTML = {};
 
-/* =========================================================
-   СТАТИСТИКА
-========================================================= */
-
-function getStats(mapping) {
-    const stats = {
-        total: 0,
-        found: 0,
-        excluded: 0,
-        lkNotFound: 0,
-        skuNotFound: 0,
-        priceNotFound: 0,
-        conflicts: 0
-    };
-
-    for (
-        const item
-        of mapping.values()
-    ) {
-        stats.total++;
-
-        if (
-            Number(item.quantity) > 1
-        ) {
-            stats.excluded++;
-        }
-
-        if (
-            item.status === 'FOUND' &&
-            Number(item.quantity) === 1
-        ) {
-            stats.found++;
-        }
-
-        switch (
-            item.status
-        ) {
-            case 'LK_NOT_FOUND':
-                stats.lkNotFound++;
-                break;
-
-            case 'SKU_NOT_FOUND':
-                stats.skuNotFound++;
-                break;
-
-            case 'PRICE_NOT_FOUND':
-                stats.priceNotFound++;
-                break;
-
-            case 'DUPLICATE_CONFLICT':
-                stats.conflicts++;
-                break;
-        }
-    }
-
-    return stats;
+function setupZones() {
+    ZONES.forEach(z => {
+        const zone = document.getElementById(z.zone);
+        const inp = document.getElementById(z.input);
+        zoneHTML[z.zone] = zone.innerHTML;
+        zone.addEventListener('click', () => inp.click());
+        zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('dragover'); });
+        zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+        zone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            zone.classList.remove('dragover');
+            if (e.dataTransfer.files.length) z.handler(e.dataTransfer.files[0]);
+        });
+        inp.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files.length) z.handler(e.target.files[0]);
+            inp.value = '';
+        });
+        document.getElementById(z.reset).addEventListener('click', () => resetZone(z.key));
+    });
 }
 
-
-/* =========================================================
-   ЛОГ НОМЕРОВ
-========================================================= */
-
-function logOrderNumbers(
-    title,
-    items
-) {
-    if (
-        !items ||
-        !items.length
-    ) {
-        log(
-            `${title}: нет`
-        );
-        return;
-    }
-
-    const ids =
-        items.map(
-            item =>
-                typeof item === 'string'
-                    ? item
-                    : item.orderId
-        );
-
-    log(
-        `${title} (${ids.length}):`
-    );
-
-    const chunkSize = 15;
-
-    for (
-        let i = 0;
-        i < ids.length;
-        i += chunkSize
-    ) {
-        log(
-            '  ' +
-            ids
-                .slice(
-                    i,
-                    i + chunkSize
-                )
-                .join(', ')
-        );
-    }
+function setZoneBusy(zoneId) {
+    document.getElementById(zoneId).innerHTML = '<div class="dz-spinner"></div><p class="dz-sub">Читаем файл...</p>';
 }
 
+function setZoneLoaded(zoneId, fileName) {
+    document.getElementById(zoneId).innerHTML =
+        `<div class="zone-loaded"><span class="ok-ico">✅</span><span>${escapeHtml(fileName)}</span></div>`;
+}
 
-/* =========================================================
-   КОПИРОВАНИЕ
-========================================================= */
+function showStats(statsId, chipsHtml) {
+    const el = document.getElementById(statsId);
+    el.innerHTML = chipsHtml;
+    el.classList.remove('hidden');
+}
 
-async function copyTextToClipboard(text) {
-    const value =
-        String(text ?? '');
-
-    if (!value) {
-        return false;
+function resetZone(key) {
+    const z = ZONES.find(x => x.key === key);
+    state[key] = null;
+    if (key === 'labels') {
+        state.pdfFile = null;
+        document.getElementById('previewBox').classList.add('hidden');
+        clientPdfDoc = null;
+        textCanvas = null;
     }
+    const zone = document.getElementById(z.zone);
+    zone.innerHTML = zoneHTML[z.zone];
+    zone.classList.remove('hidden');
+    document.getElementById(z.stats).classList.add('hidden');
+    document.getElementById(z.reset).classList.add('hidden');
+    refreshUi();
+}
 
+// ===== Обработчики файлов =====
+async function handleReestrFile(file) {
+    const z = ZONES.find(x => x.key === 'reestr');
     try {
-        if (
-            navigator.clipboard &&
-            typeof navigator.clipboard.writeText === 'function'
-        ) {
-            await navigator.clipboard.writeText(
-                value
-            );
-
-            return true;
-        }
-    } catch (error) {
-        console.warn(
-            'Clipboard API недоступен, использую запасной способ.',
-            error
+        setZoneBusy(z.zone);
+        const wb = await readWorkbook(file);
+        const { orders, qty1, dups } = parseReestr(firstSheetRows(wb));
+        state.reestr = { name: file.name, orders, qty1, dups };
+        const over = orders.size - qty1.size;
+        const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        setZoneLoaded(z.zone, file.name);
+        showStats(z.stats,
+            `<span class="chip">Всего заказов: <b>${orders.size}</b></span>` +
+            `<span class="chip chip-ok">С кол-вом 1: <b>${qty1.size}</b></span>` +
+            (over ? `<span class="chip chip-warn">С кол-вом >1: <b>${over}</b></span>` : '') +
+            (dups.length ? `<span class="chip chip-warn">⚠️ Есть дубли (${dups.length}): <b>${dups.slice(0, 5).map(esc).join(', ')}${dups.length > 5 ? '…' : ''}</b></span>` : '')
         );
+        document.getElementById(z.reset).classList.remove('hidden');
+        refreshUi();
+    } catch (err) {
+        zoneError(z, err);
     }
+}
 
+async function handleLabelsFile(file) {
+    const z = ZONES.find(x => x.key === 'labels');
     try {
-        const textarea =
-            document.createElement(
-                'textarea'
-            );
-
-        textarea.value =
-            value;
-
-        textarea.setAttribute(
-            'readonly',
-            ''
-        );
-
-        textarea.style.position =
-            'fixed';
-
-        textarea.style.left =
-            '-9999px';
-
-        textarea.style.top =
-            '0';
-
-        textarea.style.opacity =
-            '0';
-
-        document.body.appendChild(
-            textarea
-        );
-
-        textarea.focus();
-        textarea.select();
-
-        const successful =
-            document.execCommand(
-                'copy'
-            );
-
-        textarea.remove();
-
-        return successful;
-
-    } catch (error) {
-        console.error(
-            'Не удалось скопировать номер заказа.',
-            error
-        );
-
-        return false;
+        setZoneBusy(z.zone);
+        // быстрая проверка, что это читаемый PDF
+        const buf = new Uint8Array(await file.arrayBuffer());
+        pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL;
+        clientPdfDoc = await pdfjsLib.getDocument({ data: buf }).promise;
+        state.labels = { name: file.name, file };
+        state.pdfFile = file;
+        setZoneLoaded(z.zone, file.name);
+        showStats(z.stats, `<span class="chip">Этикеток (страниц PDF): <b>${clientPdfDoc.numPages}</b></span>`);
+        document.getElementById(z.reset).classList.remove('hidden');
+        refreshUi();
+        initPdfPreview();
+    } catch (err) {
+        zoneError(z, err);
     }
 }
-
-
-/* =========================================================
-   БЛОК НЕ ОБРАБОТАННЫХ ЗАКАЗОВ
-========================================================= */
-
-function showUnknownOrdersBox(
-    unknownActions
-) {
-    const oldBox =
-        document.getElementById(
-            'unknownOrdersBox'
-        );
-
-    if (oldBox) {
-        oldBox.remove();
-    }
-
-    if (
-        !unknownActions ||
-        !unknownActions.length
-    ) {
-        return;
-    }
-
-    /*
-     * ВАЖНО:
-     *
-     * Здесь дополнительно пропускаем
-     * только номера, которые реально
-     * существуют в реестре 1С.
-     */
-    const oneCIds =
-        new Set(
-            getAllOneCOrderIds()
-        );
-
-    const orders = [];
-
-    for (
-        const action
-        of unknownActions
-    ) {
-        const orderId =
-            normalizeOrderId(
-                action.orderId
-            );
-
-        if (
-            orderId &&
-            oneCIds.has(orderId) &&
-            !orders.includes(orderId)
-        ) {
-            orders.push(orderId);
-        }
-    }
-
-    const noOrderIdCount =
-        unknownActions.filter(
-            action =>
-                !action.orderId
-        ).length;
-
-    const box =
-        document.createElement(
-            'div'
-        );
-
-    box.id =
-        'unknownOrdersBox';
-
-    box.style.cssText = `
-        margin-top: 18px;
-        padding: 16px 18px;
-        border: 2px solid #f0b429;
-        border-radius: 14px;
-        background: #fffaf0;
-        box-shadow: 0 4px 14px rgba(180, 120, 20, 0.08);
-        font-family: inherit;
-        color: #4a3a12;
-    `;
-
-    const title =
-        document.createElement(
-            'div'
-        );
-
-    title.textContent =
-        '⚠️ Требуют проверки';
-
-    title.style.cssText = `
-        font-size: 16px;
-        font-weight: 800;
-        margin-bottom: 8px;
-    `;
-
-    box.appendChild(
-        title
-    );
-
-    const description =
-        document.createElement(
-            'div'
-        );
-
-    description.textContent =
-        'Эти страницы не попали в готовый PDF. Нажмите на номер заказа, чтобы скопировать его. В списке отображаются только номера из реестра 1С.';
-
-    description.style.cssText = `
-        font-size: 13px;
-        margin-bottom: 12px;
-        line-height: 1.45;
-    `;
-
-    box.appendChild(
-        description
-    );
-
-    const list =
-        document.createElement(
-            'div'
-        );
-
-    list.style.cssText = `
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-    `;
-
-    if (orders.length) {
-        for (
-            const orderId
-            of orders
-        ) {
-            const item =
-                document.createElement(
-                    'button'
-                );
-
-            item.type =
-                'button';
-
-            item.textContent =
-                orderId;
-
-            item.title =
-                'Нажмите, чтобы скопировать номер заказа';
-
-            item.style.cssText = `
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                padding: 7px 11px;
-                border-radius: 8px;
-                background: #ffffff;
-                border: 1px solid #e6c66a;
-                color: #4a3a12;
-                font-size: 13px;
-                font-weight: 700;
-                font-family: monospace;
-                cursor: pointer;
-                transition:
-                    background .18s ease,
-                    border-color .18s ease,
-                    color .18s ease,
-                    transform .08s ease;
-            `;
-
-            item.addEventListener(
-                'mouseenter',
-                function () {
-                    if (
-                        item.dataset.copied !== '1'
-                    ) {
-                        item.style.background =
-                            '#fff4c7';
-
-                        item.style.borderColor =
-                            '#d7ad32';
-                    }
-                }
-            );
-
-            item.addEventListener(
-                'mouseleave',
-                function () {
-                    if (
-                        item.dataset.copied !== '1'
-                    ) {
-                        item.style.background =
-                            '#ffffff';
-
-                        item.style.borderColor =
-                            '#e6c66a';
-                    }
-                }
-            );
-
-            item.addEventListener(
-                'mousedown',
-                function () {
-                    item.style.transform =
-                        'scale(0.97)';
-                }
-            );
-
-            item.addEventListener(
-                'mouseup',
-                function () {
-                    item.style.transform =
-                        'scale(1)';
-                }
-            );
-
-            item.addEventListener(
-                'click',
-                async function () {
-                    const copied =
-                        await copyTextToClipboard(
-                            orderId
-                        );
-
-                    if (!copied) {
-                        return;
-                    }
-
-                    item.dataset.copied =
-                        '1';
-
-                    item.textContent =
-                        '✓ ' + orderId;
-
-                    item.style.background =
-                        '#dcfce7';
-
-                    item.style.borderColor =
-                        '#86efac';
-
-                    item.style.color =
-                        '#166534';
-
-                    item.style.cursor =
-                        'default';
-
-                    item.title =
-                        'Номер уже скопирован';
-
-                    item.style.transform =
-                        'scale(1)';
-                }
-            );
-
-            list.appendChild(
-                item
-            );
-        }
-    }
-
-    if (
-        noOrderIdCount > 0
-    ) {
-        const item =
-            document.createElement(
-                'span'
-            );
-
-        item.textContent =
-            `Номер не распознан: ${noOrderIdCount} стр.`;
-
-        item.style.cssText = `
-            display: inline-flex;
-            align-items: center;
-            padding: 7px 11px;
-            border-radius: 8px;
-            background: #ffffff;
-            border: 1px solid #e6c66a;
-            color: #7a5a00;
-            font-size: 13px;
-            font-weight: 700;
-        `;
-
-        list.appendChild(
-            item
-        );
-    }
-
-    if (
-        !orders.length &&
-        !noOrderIdCount
-    ) {
-        const item =
-            document.createElement(
-                'span'
-            );
-
-        item.textContent =
-            'Нет распознанных номеров из реестра 1С для проверки.';
-
-        item.style.cssText = `
-            font-size: 13px;
-            color: #7a5a00;
-        `;
-
-        list.appendChild(
-            item
-        );
-    }
-
-    box.appendChild(
-        list
-    );
-
-    const statusBox =
-        document.getElementById(
-            'statusBox'
-        );
-
-    if (
-        statusBox &&
-        statusBox.parentNode
-    ) {
-        statusBox.parentNode.insertBefore(
-            box,
-            statusBox.nextSibling
-        );
-    } else {
-        document.body.appendChild(
-            box
-        );
-    }
-}
-
-
-/* =========================================================
-   ЗАГРУЗКА 1С
-========================================================= */
-
-async function handleOneCFile(file) {
-    setStatus(
-        'Читаю реестр 1С...',
-        5
-    );
-
-    const workbook =
-        await readExcelFile(
-            file
-        );
-
-    const rows =
-        getFirstSheetRows(
-            workbook
-        );
-
-    state.oneC =
-        parseOneC(rows);
-
-    state.mapping =
-        new Map();
-
-    state.lastOutputPdf =
-        null;
-
-    log(
-        `Реестр 1С: найдено ${state.oneC.length} заказов.`
-    );
-
-    const excluded =
-        state.oneC.filter(
-            x =>
-                Number(
-                    x.quantity
-                ) > 1
-        );
-
-    log(
-        `Количество > 1: ${excluded.length}.`
-    );
-
-    logOrderNumbers(
-        'Заказы с количеством > 1',
-        excluded
-    );
-
-    rebuildMappingIfPossible();
-}
-
-
-/* =========================================================
-   ЗАГРУЗКА ЛК
-========================================================= */
-
-async function handleLKFile(file) {
-    setStatus(
-        'Читаю весь файл ЛК...',
-        15
-    );
-
-    const workbook =
-        await readExcelFile(
-            file
-        );
-
-    state.lk =
-        workbook;
-
-    state.mapping =
-        new Map();
-
-    state.lastOutputPdf =
-        null;
-
-    let totalRows = 0;
-
-    for (
-        const sheetName
-        of workbook.SheetNames
-    ) {
-        const sheet =
-            workbook.Sheets[
-                sheetName
-            ];
-
-        if (!sheet) {
-            continue;
-        }
-
-        const rows =
-            XLSX.utils.sheet_to_json(
-                sheet,
-                {
-                    header: 1,
-                    raw: false,
-                    defval: ''
-                }
-            );
-
-        totalRows +=
-            rows.length;
-    }
-
-    log(
-        `ЛК: прочитан весь файл. Листов: ${workbook.SheetNames.length}, строк: ${totalRows}.`
-    );
-
-    log(
-        'Номера заказов будут искаться во всех ячейках файла, но только среди номеров из реестра 1С.'
-    );
-
-    rebuildMappingIfPossible();
-}
-
-
-/* =========================================================
-   ЗАГРУЗКА ПРАЙСА
-========================================================= */
 
 async function handlePriceFile(file) {
-    setStatus(
-        'Читаю прайс...',
-        25
-    );
-
-    const workbook =
-        await readExcelFile(
-            file
-        );
-
-    const rows =
-        getFirstSheetRows(
-            workbook
-        );
-
-    state.priceMap =
-        parsePrice(rows);
-
-    state.mapping =
-        new Map();
-
-    state.lastOutputPdf =
-        null;
-
-    log(
-        `Прайс: найдено ${state.priceMap.size} SKU.`
-    );
-
-    rebuildMappingIfPossible();
-}
-
-
-/* =========================================================
-   ЗАГРУЗКА PDF
-========================================================= */
-
-async function handlePdfFile(file) {
-    state.pdfFile =
-        file;
-
-    state.lastOutputPdf =
-        null;
-
-    log(
-        `Этикетки: ${file.name}`
-    );
-
-    log(
-        `Размер PDF: ${(file.size / 1024 / 1024).toFixed(2)} МБ`
-    );
-
-    if (
-        state.mapping.size
-    ) {
-        log(
-            'Связка построена. Запускаю обработку этикеток...'
-        );
-
-        await processPdf();
+    const z = ZONES.find(x => x.key === 'price');
+    try {
+        setZoneBusy(z.zone);
+        const wb = await readWorkbook(file);
+        const map = parsePrice(firstSheetRows(wb));
+        if (!Object.keys(map).length) throw new Error('В прайсе не найдено ни одной строки «артикул + название».');
+        state.price = { name: file.name, map };
+        setZoneLoaded(z.zone, file.name);
+        showStats(z.stats, `<span class="chip">Товаров в прайсе: <b>${Object.keys(map).length}</b></span>`);
+        document.getElementById(z.reset).classList.remove('hidden');
+        refreshUi();
+    } catch (err) {
+        zoneError(z, err);
     }
 }
 
-
-/* =========================================================
-   ПЕРЕСТРОЕНИЕ СВЯЗКИ
-========================================================= */
-
-function rebuildMappingIfPossible() {
-    if (
-        !state.oneC.length ||
-        !state.lk ||
-        !state.lk.SheetNames ||
-        !state.lk.SheetNames.length ||
-        !state.priceMap.size
-    ) {
-        updateDownloadButtons();
-        return;
-    }
-
-    state.mapping =
-        buildMapping(
-            state.oneC,
-            state.lk,
-            state.priceMap
+async function handleLkFile(file) {
+    const z = ZONES.find(x => x.key === 'lk');
+    try {
+        setZoneBusy(z.zone);
+        const wb = await readWorkbook(file);
+        const map = parseLk(firstSheetRows(wb));
+        state.lk = { name: file.name, map };
+        setZoneLoaded(z.zone, file.name);
+        showStats(z.stats,
+            `<span class="chip">Заказов в списке: <b>${map.size}</b></span>` +
+            `<span class="chip">Товаров: <b>${map.itemCount || map.size}</b></span>`
         );
-
-    const stats =
-        getStats(
-            state.mapping
-        );
-
-    const foundOrders = [];
-    const quantityOrders = [];
-    const lkNotFoundOrders = [];
-    const skuNotFoundOrders = [];
-    const conflictOrders = [];
-
-    for (
-        const item
-        of state.mapping.values()
-    ) {
-        if (
-            item.status === 'FOUND' &&
-            Number(item.quantity) === 1
-        ) {
-            foundOrders.push(item);
-        }
-
-        if (
-            Number(item.quantity) > 1
-        ) {
-            quantityOrders.push(item);
-        }
-
-        if (
-            item.status === 'LK_NOT_FOUND'
-        ) {
-            lkNotFoundOrders.push(item);
-        }
-
-        if (
-            item.status === 'SKU_NOT_FOUND'
-        ) {
-            skuNotFoundOrders.push(item);
-        }
-
-        if (
-            item.status === 'DUPLICATE_CONFLICT'
-        ) {
-            conflictOrders.push(item);
-        }
+        document.getElementById(z.reset).classList.remove('hidden');
+        refreshUi();
+    } catch (err) {
+        zoneError(z, err);
     }
-
-    log('');
-
-    log(
-        '========================================'
-    );
-
-    log(
-        'СОПОСТАВЛЕНИЕ'
-    );
-
-    log(
-        '========================================'
-    );
-
-    log(
-        `Всего заказов из 1С: ${stats.total}`
-    );
-
-    log(
-        `Найдено и готово: ${stats.found}`
-    );
-
-    logOrderNumbers(
-        'Заказы quantity = 1',
-        foundOrders
-    );
-
-    log('');
-
-    log(
-        `Количество > 1: ${stats.excluded}`
-    );
-
-    logOrderNumbers(
-        'Заказы quantity > 1',
-        quantityOrders
-    );
-
-    log('');
-
-    log(
-        `Не найдено в ЛК: ${stats.lkNotFound}`
-    );
-
-    logOrderNumbers(
-        'Заказы не найдены в ЛК',
-        lkNotFoundOrders
-    );
-
-    log('');
-
-    log(
-        `SKU не найден: ${stats.skuNotFound}`
-    );
-
-    logOrderNumbers(
-        'Заказы без SKU',
-        skuNotFoundOrders
-    );
-
-    log('');
-
-    log(
-        `SKU не найден в прайсе: ${stats.priceNotFound}`
-    );
-
-    log(
-        `Конфликты SKU: ${stats.conflicts}`
-    );
-
-    if (
-        conflictOrders.length
-    ) {
-        logOrderNumbers(
-            'Заказы с конфликтом SKU',
-            conflictOrders
-        );
-    }
-
-    log(
-        '========================================'
-    );
-
-    log('');
-
-    log(
-        'НАЙДЕННЫЕ SKU ПО ЗАКАЗАМ:'
-    );
-
-    const foundWithSku =
-        [...state.mapping.values()]
-            .filter(
-                item =>
-                    item.status ===
-                    'FOUND'
-            );
-
-    for (
-        const item
-        of foundWithSku
-    ) {
-        log(
-            `${item.orderId} → ${item.skus.join(', ')}`
-        );
-    }
-
-    log('');
-
-    setStatus(
-        'Данные сопоставлены',
-        30
-    );
-
-    updateDownloadButtons();
 }
 
-
-/* =========================================================
-   OCR — ТОЛЬКО НОМЕРА ИЗ 1С
-========================================================= */
-
-function getEligibleOrderIds() {
-    const result = [];
-
-    for (
-        const item
-        of state.mapping.values()
-    ) {
-        if (
-            item.status === 'FOUND' &&
-            Number(item.quantity) === 1 &&
-            !state.manualExcluded.has(
-                item.orderId
-            )
-        ) {
-            result.push(
-                item.orderId
-            );
-        }
-    }
-
-    return result;
+function zoneError(z, err) {
+    const zone = document.getElementById(z.zone);
+    zone.innerHTML = zoneHTML[z.zone];
+    alert('❌ ' + err.message);
 }
 
-
-function getExcludedQuantityOrderIds() {
-    const result = [];
-
-    for (
-        const item
-        of state.mapping.values()
-    ) {
-        if (
-            item.status === 'FOUND' &&
-            Number(item.quantity) > 1
-        ) {
-            result.push(
-                item.orderId
-            );
-        }
-    }
-
-    return result;
+// ===== Общее состояние интерфейса =====
+function allLoaded() {
+    return !!(state.reestr && state.labels && state.price && state.lk);
 }
 
+function refreshUi() {
+    const missing = [];
+    if (!state.reestr) missing.push('реестр 1С');
+    if (!state.labels) missing.push('этикетки');
+    if (!state.price) missing.push('прайс');
+    if (!state.lk) missing.push('список заказов из ЛК');
 
-/*
- * Все номера ИСКЛЮЧИТЕЛЬНО из реестра 1С.
- */
-function getAllOneCOrderIds() {
-    return [
-        ...new Set(
-            state.oneC
-                .map(
-                    item =>
-                        normalizeOrderId(
-                            item.orderId
-                        )
-                )
-                .filter(Boolean)
-        )
+    // кнопка выгрузки доступна, когда есть данные заказов (PDF не нужен)
+    const dataReady = !!(state.reestr && state.price && state.lk);
+    state.exportRows = dataReady ? buildExportRows() : [];
+    const exportBtn = document.getElementById('exportListBtn');
+    const exportHint = document.getElementById('exportHint');
+    exportBtn.disabled = !dataReady;
+    exportHint.textContent = dataReady
+        ? `Заказов: ${state.reestr.orders.size}, товаров: ${state.exportRows.length} — весь товар из заказов, по алфавиту. Жёлтым подсвечены заказы с количеством больше 1.`
+        : 'Нужны: ' + missing.filter(m => m !== 'этикетки').join(', ');
+
+    const btn = document.getElementById('btnStartProcess');
+    const hint = document.getElementById('startHint');
+    if (allLoaded()) {
+        btn.disabled = false;
+        hint.textContent = 'Все файлы загружены — можно запускать обработку.';
+    } else {
+        btn.disabled = true;
+        hint.textContent = 'Ждём: ' + missing.join(', ') + '.';
+    }
+    redrawTextPreview();
+}
+
+// ===== Выгрузка «Заказы и наименования» =====
+/* Все заказы из реестра 1С и весь их товар из списка ЛК: по одной строке
+   на каждый товар (заказ с несколькими SKU даёт несколько строк).
+   Название берём по артикулу из прайса, сортировка по алфавиту.
+   Заказы с количеством больше 1 подсвечиваются жёлтым. */
+function buildExportRows() {
+    if (!state.reestr) return [];
+    const rows = [];
+    state.reestr.orders.forEach((qty, orderId) => {
+        const skus = state.lk ? (state.lk.map.get(orderId) || []) : [];
+        if (skus.length) {
+            skus.forEach(sku => {
+                const name = state.price ? (state.price.map[sku] || '') : '';
+                rows.push({ orderId, sku, name, qty, sortKey: (name || '\uffff') + orderId + sku });
+            });
+        } else {
+            // заказа нет в списке ЛК — строка с пустым артикулом, чтобы
+            // заказ не потерялся из файла
+            rows.push({ orderId, sku: '', name: '', qty, sortKey: '\uffff' + orderId });
+        }
+    });
+    rows.sort((a, b) => a.sortKey.localeCompare(b.sortKey, 'ru'));
+    return rows;
+}
+
+function exportOrdersFile() {
+    const rows = state.exportRows && state.exportRows.length ? state.exportRows : buildExportRows();
+    if (!rows.length) { alert('Сначала загрузите реестр 1С, прайс и список заказов из ЛК.'); return; }
+
+    const ws = XLSX.utils.aoa_to_sheet([
+        ['Заказ', 'SKU', 'Название товара'],
+        ...rows.map(r => [r.orderId, r.sku, r.name])
+    ]);
+    ws['!cols'] = [{ wch: 16 }, { wch: 12 }, { wch: 95 }];
+
+    // Подсветка номеров заказов с количеством больше 1 (нужна библиотека со стилями)
+    const lib = window.XLSX_STYLED || XLSX;
+    if (window.XLSX_STYLED) {
+        ['A1', 'B1', 'C1'].forEach(a => {
+            if (ws[a]) ws[a].s = { font: { bold: true }, fill: { fgColor: { rgb: 'E6E6FA' } } };
+        });
+        rows.forEach((r, i) => {
+            if (r.qty > 1) {
+                ws['A' + (i + 2)].s = {
+                    fill: { fgColor: { rgb: 'FFEB9C' } },
+                    font: { bold: true, color: { rgb: '9C6500' } }
+                };
+            }
+        });
+    }
+
+    const wb = lib.utils.book_new();
+    lib.utils.book_append_sheet(wb, ws, 'Заказы и наименования');
+    lib.writeFile(wb, 'заказы_и_наименования.xlsx');
+}
+
+// ===== Превью первой этикетки =====
+async function initPdfPreview() {
+    if (!state.pdfFile) return;
+    const box = document.getElementById('previewBox');
+    box.classList.remove('hidden');
+
+    const arrayBuffer = await state.pdfFile.arrayBuffer();
+    pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL;
+    clientPdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const page = await clientPdfDoc.getPage(1);
+    state.pageRotation = page.rotate || 0;
+
+    const base = page.getViewport({ scale: 1 });
+    state.visualW = base.width;
+    state.visualH = base.height;
+
+    const availW = Math.max(box.clientWidth - 30, 140);
+    const availH = 330;
+    const scale = Math.min(availW / base.width, availH / base.height);
+    state.previewScale = scale;
+    const viewport = page.getViewport({ scale });
+
+    const canvas = document.getElementById('pdfCanvas');
+    canvas.width = Math.floor(viewport.width);
+    canvas.height = Math.floor(viewport.height);
+
+    const wrapper = document.getElementById('previewWrapper');
+    wrapper.style.width = canvas.width + 'px';
+    wrapper.style.height = canvas.height + 'px';
+
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+
+    if (!textCanvas) {
+        textCanvas = document.createElement('canvas');
+        textCanvas.id = 'textPreviewCanvas';
+        textCanvas.style.cssText = 'position:absolute;left:0;top:0;pointer-events:none;z-index:5;';
+        wrapper.appendChild(textCanvas);
+    }
+    textCanvas.width = canvas.width;
+    textCanvas.height = canvas.height;
+    redrawTextPreview();
+}
+
+function redrawTextPreview() {
+    if (!textCanvas) return;
+    const ctx = textCanvas.getContext('2d');
+    ctx.clearRect(0, 0, textCanvas.width, textCanvas.height);
+    const cw = textCanvas.width, ch = textCanvas.height;
+    if (!cw || !ch) return;
+
+    const rot = normalizeAngle(state.pageRotation);
+    const VW = state.visualW, VH = state.visualH;
+    if (!VW || !VH) return;
+    const mw = (rot === 90 || rot === 270) ? VH : VW;
+    const mh = (rot === 90 || rot === 270) ? VW : VH;
+
+    const p = pythonPlacement(rot, mw, mh);
+    const v0 = pageToVisual(rot, mw, mh, p.x, p.y);
+    const dv = pageDeltaToVisual(rot, 0, 1);
+    const angle = Math.atan2(dv.y, dv.x);
+    const s = state.previewScale;
+
+    const first = (state.exportRows || []).find(r => r.name);
+    const sample = first ? first.name : 'тут будет название';
+
+    // тот же автоподбор размера, что и при финальной отрисовке (через метрики канваса)
+    const maxSize = Number(state.textConfig.fontSize) || 5;
+    ctx.font = `${maxSize * s}px ${previewFontFamily}`;
+    const fit = fitTextLayout(
+        (text, size) => { ctx.font = `${size * s}px ${previewFontFamily}`; return ctx.measureText(text).width / s; },
+        sample, mw, mh, p.x, p.y, maxSize
+    );
+    const dsh = pageDeltaToVisual(rot, -fit.shift, 0);
+
+    ctx.font = `${fit.size * s}px ${previewFontFamily}`;
+    ctx.fillStyle = state.textConfig.color || '#000000';
+    ctx.textBaseline = 'alphabetic';
+    ctx.save();
+    ctx.translate((v0.x + dsh.x) * s, (v0.y + dsh.y) * s);
+    ctx.rotate(angle);
+    ctx.fillText(sample, 0, 0);
+    ctx.restore();
+}
+
+// ===== Шрифт и fontkit =====
+function b64ToBytes(b64) {
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+}
+
+function looksLikeTtf(bytes) {
+    return bytes && bytes.length > 50000 &&
+        bytes[0] === 0x00 && bytes[1] === 0x01 && bytes[2] === 0x00 && bytes[3] === 0x00;
+}
+
+async function loadFontBytes() {
+    // жирное начертание (лучше видно при мелком размере) — сначала встроенное, затем файлы/CDN
+    if (window.DEJAVU_BOLD_FONT_B64) {
+        try {
+            const b = b64ToBytes(window.DEJAVU_BOLD_FONT_B64);
+            if (looksLikeTtf(b)) { state.fontSource = 'font-data-bold.js'; return b; }
+        } catch (e) { /* идём дальше */ }
+    }
+    if (window.DEJAVU_FONT_B64) {
+        try {
+            const b = b64ToBytes(window.DEJAVU_FONT_B64);
+            if (looksLikeTtf(b)) { state.fontSource = 'font-data.js'; return b; }
+        } catch (e) { /* идём дальше */ }
+    }
+    /* Жирное начертание — при мелком размере (5) читается заметно лучше;
+       если жирного нет, откатываемся к обычному DejaVuSans. */
+    const urls = [
+        'DejaVuSans-Bold.ttf',
+        'fonts/DejaVuSans-Bold.ttf',
+        'https://cdn.jsdelivr.net/npm/dejavu-fonts-ttf@2.37.3/ttf/DejaVuSans-Bold.ttf',
+        'DejaVuSans.ttf',
+        'fonts/DejaVuSans.ttf',
+        'https://cdn.jsdelivr.net/gh/dejavu-fonts/dejavu@master/ttf/DejaVuSans.ttf',
+        'https://raw.githubusercontent.com/dejavu-fonts/dejavu/master/ttf/DejaVuSans.ttf'
     ];
-}
-
-
-/*
- * =========================================================
- * ПОИСК НОМЕРА В OCR
- *
- * КРИТИЧЕСКОЕ ПРАВИЛО:
- *
- * Функция НИКОГДА не возвращает номер,
- * которого нет в orderIds.
- *
- * orderIds = номера только из реестра 1С.
- *
- * Также запрещено простое:
- *
- *   digitsOnly.includes(orderId)
- *
- * потому что оно могло найти, например,
- * номер 123456 внутри числа 991234567890.
- *
- * Теперь номер должен совпасть целиком.
- * Между цифрами допускаются пробелы/переносы.
- * =========================================================
- */
-function findOrderIdInOcrText(
-    text,
-    orderIds
-) {
-    if (
-        !text ||
-        !orderIds ||
-        !orderIds.length
-    ) {
-        return null;
+    for (const url of urls) {
+        try {
+            const res = await fetch(url);
+            if (res.ok) {
+                const bytes = new Uint8Array(await res.arrayBuffer());
+                if (looksLikeTtf(bytes)) { state.fontSource = url; return bytes; }
+            }
+        } catch (e) { /* пробуем следующий */ }
     }
-
-    const sourceText =
-        String(text);
-
-    const sortedIds =
-        [
-            ...new Set(
-                orderIds
-                    .map(
-                        normalizeOrderId
-                    )
-                    .filter(Boolean)
-            )
-        ].sort(
-            (a, b) =>
-                String(b).length -
-                String(a).length
-        );
-
-    /*
-     * -----------------------------------------------------
-     * Вариант 1.
-     *
-     * Ищем последовательность цифр,
-     * разрешая пробелы и переносы между цифрами.
-     *
-     * Границы:
-     * слева и справа НЕ должно быть цифры.
-     *
-     * Поэтому:
-     *
-     * 123456
-     *
-     * найдётся,
-     *
-     * но:
-     *
-     * 991234567890
-     *
-     * не даст ложного совпадения.
-     * -----------------------------------------------------
-     */
-
-    for (
-        const orderId
-        of sortedIds
-    ) {
-        const pattern =
-            orderId
-                .split('')
-                .join(
-                    '[\\s\\r\\n]*'
-                );
-
-        const regex =
-            new RegExp(
-                `(?<!\\d)${pattern}(?!\\d)`
-            );
-
-        if (
-            regex.test(
-                sourceText
-            )
-        ) {
-            return orderId;
-        }
-    }
-
-    /*
-     * -----------------------------------------------------
-     * Вариант 2.
-     *
-     * OCR иногда вставляет символы вроде:
-     *
-     * 123 456 789
-     *
-     * или:
-     *
-     * 123-456-789
-     *
-     * Но здесь всё равно проверяем только
-     * номера из реестра 1С.
-     *
-     * Разрешаем между цифрами пробелы,
-     * дефисы и точки.
-     * -----------------------------------------------------
-     */
-
-    for (
-        const orderId
-        of sortedIds
-    ) {
-        const pattern =
-            orderId
-                .split('')
-                .join(
-                    '[\\s\\-._]*'
-                );
-
-        const regex =
-            new RegExp(
-                `(?<!\\d)${pattern}(?!\\d)`
-            );
-
-        if (
-            regex.test(
-                sourceText
-            )
-        ) {
-            return orderId;
-        }
-    }
-
     return null;
 }
 
-
-/* =========================================================
-   PDF.JS
-========================================================= */
-
-async function renderPdfPage(
-    pdf,
-    pageNumber
-) {
-    const page =
-        await pdf.getPage(
-            pageNumber
-        );
-
-    const viewport =
-        page.getViewport({
-            scale: OCR_SCALE
-        });
-
-    const canvas =
-        document.createElement(
-            'canvas'
-        );
-
-    const context =
-        canvas.getContext(
-            '2d',
-            {
-                willReadFrequently:
-                    true
-            }
-        );
-
-    canvas.width =
-        Math.ceil(
-            viewport.width
-        );
-
-    canvas.height =
-        Math.ceil(
-            viewport.height
-        );
-
-    await page.render({
-        canvasContext:
-            context,
-        viewport
-    }).promise;
-
-    /*
-     * Основной быстрый OCR:
-     * верхние 35%.
-     */
-    const ocrCanvas =
-        document.createElement(
-            'canvas'
-        );
-
-    const ocrContext =
-        ocrCanvas.getContext(
-            '2d',
-            {
-                willReadFrequently:
-                    true
-            }
-        );
-
-    ocrCanvas.width =
-        canvas.width;
-
-    ocrCanvas.height =
-        Math.max(
-            1,
-            Math.floor(
-                canvas.height * 0.35
-            )
-        );
-
-    ocrContext.drawImage(
-        canvas,
-        0,
-        0,
-        canvas.width,
-        ocrCanvas.height,
-        0,
-        0,
-        ocrCanvas.width,
-        ocrCanvas.height
-    );
-
-    return {
-        canvas,
-        ocrCanvas
-    };
-}
-
-
-/* =========================================================
-   ШРИФТ
-========================================================= */
-
-async function getFontBytes() {
-    if (state.fontBytes) {
-        return state.fontBytes;
-    }
-
-    if (
-        window.DEJAVU_FONT_B64
-    ) {
-        try {
-            const base64 =
-                window.DEJAVU_FONT_B64
-                    .replace(
-                        /^data:.*?base64,/,
-                        ''
-                    )
-                    .replace(
-                        /\s/g,
-                        ''
-                    );
-
-            const binary =
-                atob(base64);
-
-            const bytes =
-                new Uint8Array(
-                    binary.length
-                );
-
-            for (
-                let i = 0;
-                i < binary.length;
-                i++
-            ) {
-                bytes[i] =
-                    binary.charCodeAt(i);
-            }
-
-            state.fontBytes =
-                bytes;
-
-            state.fontSource =
-                'font-data.js';
-
-            return bytes;
-
-        } catch (error) {
-            console.warn(
-                'Не удалось загрузить шрифт из font-data.js',
-                error
-            );
-        }
-    }
-
+async function setupPreviewFont(bytes) {
     try {
-        const response =
-            await fetch(
-                'fonts/DejaVuSans.ttf'
-            );
-
-        if (response.ok) {
-            state.fontBytes =
-                new Uint8Array(
-                    await response.arrayBuffer()
-                );
-
-            state.fontSource =
-                'fonts/DejaVuSans.ttf';
-
-            return state.fontBytes;
-        }
-
-    } catch (error) {
-        console.warn(
-            'Локальный шрифт недоступен',
-            error
-        );
-    }
-
-    throw new Error(
-        'Не найден DejaVuSans.ttf. Проверьте font-data.js или папку fonts.'
-    );
+        const face = new FontFace('LabelFont', bytes.slice().buffer);
+        await face.load();
+        document.fonts.add(face);
+        previewFontFamily = 'LabelFont, Arial, sans-serif';
+        redrawTextPreview();
+    } catch (e) { /* превью останется на Arial */ }
 }
-
 
 async function getFontkit() {
-    if (window.fontkit) {
-        return window.fontkit;
-    }
-
-    await loadScript(
-        'https://cdn.jsdelivr.net/npm/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js'
-    );
-
-    if (window.fontkit) {
-        return window.fontkit;
-    }
-
-    throw new Error(
-        'Не удалось загрузить fontkit.'
-    );
-}
-
-
-function loadScript(src) {
-    return new Promise(
-        (
-            resolve,
-            reject
-        ) => {
-            const script =
-                document.createElement(
-                    'script'
-                );
-
-            script.src =
-                src;
-
-            script.onload =
-                () => resolve();
-
-            script.onerror =
-                () =>
-                    reject(
-                        new Error(
-                            `Не удалось загрузить ${src}`
-                        )
-                    );
-
-            document.head.appendChild(
-                script
-            );
-        }
-    );
-}
-
-
-/* =========================================================
-   ЦВЕТ
-========================================================= */
-
-function parseColorLib(value) {
-    const color =
-        String(
-            value ||
-            '#000000'
-        )
-            .trim()
-            .replace(
-                '#',
-                ''
-            );
-
-    if (
-        /^[0-9a-fA-F]{6}$/.test(
-            color
-        )
-    ) {
-        const r =
-            parseInt(
-                color.slice(0, 2),
-                16
-            ) / 255;
-
-        const g =
-            parseInt(
-                color.slice(2, 4),
-                16
-            ) / 255;
-
-        const b =
-            parseInt(
-                color.slice(4, 6),
-                16
-            ) / 255;
-
-        return PDFLib.rgb(
-            r,
-            g,
-            b
-        );
-    }
-
-    return PDFLib.rgb(
-        0,
-        0,
-        0
-    );
-}
-
-
-/* =========================================================
-   РАЗМЕЩЕНИЕ
-   НЕ МЕНЯЕМ
-========================================================= */
-
-function normalizeAngle(angle) {
-    let a =
-        Number(angle) || 0;
-
-    a =
-        (
-            (a % 360) +
-            360
-        ) % 360;
-
-    if (a === 360) {
-        a = 0;
-    }
-
-    return a;
-}
-
-
-function pythonPlacement(
-    rot,
-    mw,
-    mh
-) {
-    switch (
-        normalizeAngle(rot)
-    ) {
-        case 90:
-            return {
-                x: mw - 2,
-                y: 0
-            };
-
-        case 270:
-            return {
-                x: 5,
-                y: mh - 1
-            };
-
-        case 180:
-            return {
-                x: mw - 10,
-                y: mh - 1
-            };
-
-        case 0:
-        default:
-            return {
-                x: 5,
-                y: 1
-            };
+    if (window.fontkit) return window.fontkit;
+    await new Promise((resolve) => {
+        const s = document.createElement('script');
+        s.src = 'fontkit.local.js';
+        s.onload = () => resolve();
+        s.onerror = () => resolve();
+        document.head.appendChild(s);
+    });
+    if (window.fontkit) return window.fontkit;
+    try {
+        const mod = await import('https://cdn.jsdelivr.net/npm/@pdf-lib/fontkit@1.1.2/+esm');
+        return mod.default || mod;
+    } catch (e) {
+        return null;
     }
 }
 
+// ===== Сопоставление номера заказа на этикетке с реестром =====
+const flexRegexCache = new Map();
 
-function drawLabel(
-    page,
-    font,
-    productName,
-    cfg
-) {
-    const rot =
-        normalizeAngle(
-            page.getRotation().angle
-        );
-
-    const mb =
-        page.getMediaBox();
-
-    const mw =
-        mb.width;
-
-    const mh =
-        mb.height;
-
-    const {
-        x,
-        y
-    } =
-        pythonPlacement(
-            rot,
-            mw,
-            mh
-        );
-
-    page.drawText(
-        String(
-            productName || ''
-        ),
-        {
-            x,
-            y,
-            size:
-                Number(
-                    cfg.fontSize
-                ) || 5,
-            font,
-            color:
-                parseColorLib(
-                    cfg.color
-                ),
-            rotate:
-                PDFLib.degrees(90)
-        }
-    );
+function flexRegex(id) {
+    let re = flexRegexCache.get(id);
+    if (!re) {
+        const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        re = new RegExp('(^|[^0-9])' + escaped.split('').join('\\s*') + '($|[^0-9])');
+        flexRegexCache.set(id, re);
+    }
+    return re;
 }
 
-
-/* =========================================================
-   СОРТИРОВКА PDF
-========================================================= */
-
-function compareProductNames(
-    a,
-    b
-) {
-    const nameA =
-        String(
-            a?.item?.productName ||
-            ''
-        )
-            .trim();
-
-    const nameB =
-        String(
-            b?.item?.productName ||
-            ''
-        )
-            .trim();
-
-    const emptyA =
-        nameA === '';
-
-    const emptyB =
-        nameB === '';
-
-    if (
-        emptyA &&
-        !emptyB
-    ) {
-        return 1;
-    }
-
-    if (
-        !emptyA &&
-        emptyB
-    ) {
-        return -1;
-    }
-
-    const nameCompare =
-        nameA.localeCompare(
-            nameB,
-            'ru',
-            {
-                sensitivity:
-                    'base',
-                numeric: true
-            }
-        );
-
-    if (
-        nameCompare !== 0
-    ) {
-        return nameCompare;
-    }
-
-    return (
-        a.pageIndex -
-        b.pageIndex
-    );
+/* Поиск номеров реестра в тексте с допуском пробелов между цифрами (для OCR). */
+function findReestrIdsFlexible(text) {
+    const found = [];
+    state.reestr.orders.forEach((_, id) => {
+        if (flexRegex(id).test(text)) found.push(id);
+    });
+    return found;
 }
 
+function pickDisplayNumber(runs) {
+    const preferred = [...runs].filter(d => /^\d{10,13}$/.test(d));
+    if (preferred.length) return preferred.sort((a, b) => b.length - a.length)[0];
+    return null;
+}
 
-/* =========================================================
-   OCR WORKERS
-========================================================= */
+function decideByReestrIds(ids) {
+    const qty1 = ids.filter(id => state.reestr.qty1.has(id));
+    if (qty1.length === 1) return { action: 'keep', orderId: qty1[0] };
+    if (qty1.length > 1) {
+        return { action: 'remove', reason: 'неоднозначно — несколько заказов с кол-вом 1: ' + qty1.join(', '), display: qty1[0] };
+    }
+    const qty = Math.max(...ids.map(id => state.reestr.orders.get(id)));
+    return { action: 'remove', reason: `кол-во ${fmtQty(qty)} (больше 1)`, display: ids[0] };
+}
 
-async function createOcrWorkers() {
-    const count =
-        Math.min(
-            OCR_WORKERS,
-            navigator.hardwareConcurrency
-                ? Math.max(
-                    1,
-                    navigator.hardwareConcurrency - 1
-                )
-                : OCR_WORKERS
-        );
+/* Решение по тексту страницы этикетки.
+   Возвращает { action: 'keep' | 'remove', ... } или { needOcr: true }. */
+function decideByText(text, isOcr) {
+    const txt = String(text || '');
+    const runs = new Set((txt.match(/\d{8,}/g) || []).map(normalizeOrderId));
+    const inReestr = [...runs].filter(id => state.reestr.orders.has(id));
 
-    log(
-        `Запускаю OCR-worker: ${count}`
-    );
+    if (inReestr.length) return decideByReestrIds(inReestr);
 
+    // цифры могли «разорваться» пробелами — пробуем гибкий поиск по номерам реестра
+    const flex = findReestrIdsFlexible(txt);
+    if (flex.length) return decideByReestrIds(flex);
+
+    if (isOcr) {
+        const display = pickDisplayNumber(runs);
+        if (!display) return { action: 'remove', reason: 'номер не распознан', display: null };
+        return { action: 'remove', reason: 'нет в реестре', display };
+    }
+
+    if (runs.size === 0) return { needOcr: true }; // текстовый слой пуст — вероятно, скан
+
+    return { action: 'remove', reason: 'нет в реестре', display: pickDisplayNumber(runs) };
+}
+
+// ===== OCR (только для страниц без текстового слоя) =====
+async function createOcrPool(size) {
+    if (!window.Tesseract) await loadScript(TESSERACT_URL);
     const workers = [];
-
-    for (
-        let i = 0;
-        i < count;
-        i++
-    ) {
-        const worker =
-            await Tesseract.createWorker(
-                OCR_LANG
-            );
-
-        await worker.setParameters({
-            tessedit_pageseg_mode:
-                Tesseract.PSM.SPARSE_TEXT
-        });
-
-        workers.push(worker);
+    for (let i = 0; i < size; i++) {
+        const w = await Tesseract.createWorker(OCR_LANG);
+        try { await w.setParameters({ tessedit_char_whitelist: '0123456789' }); } catch (e) { /* необязательно */ }
+        workers.push(w);
     }
-
     return workers;
 }
 
+async function ocrAndDecide(worker, page) {
+    const cv = document.createElement('canvas');
+    const cropCv = document.createElement('canvas');
+    const viewport = page.getViewport({ scale: 1.5 });
+    cv.width = viewport.width;
+    cv.height = viewport.height;
+    await page.render({ canvasContext: cv.getContext('2d'), viewport }).promise;
 
-/* =========================================================
-   OCR СТРАНИЦЫ
-========================================================= */
+    // номер заказа — в верхней части этикетки
+    const cropPx = Math.round(cv.height * 0.35);
+    cropCv.width = cv.width;
+    cropCv.height = cropPx;
+    cropCv.getContext('2d').drawImage(cv, 0, 0, cv.width, cropPx, 0, 0, cv.width, cropPx);
 
-async function recognizePdfPage(
-    pdf,
-    pageIndex,
-    orderIds,
-    worker
-) {
-    const {
-        canvas,
-        ocrCanvas
-    } =
-        await renderPdfPage(
-            pdf,
-            pageIndex + 1
-        );
-
-    /*
-     * -------------------------------------------------------
-     * ЭТАП 1.
-     *
-     * Быстрый OCR верхних 35%.
-     * -------------------------------------------------------
-     */
-
-    let ocrResult;
-
-    try {
-        ocrResult =
-            await worker.recognize(
-                ocrCanvas
-            );
-    } catch (error) {
-        /*
-         * Если быстрый OCR упал,
-         * всё равно пробуем полную страницу.
-         */
-        ocrResult = null;
-
-        console.warn(
-            `Быстрый OCR не сработал для страницы ${pageIndex + 1}`,
-            error
-        );
+    let text = ((await worker.recognize(cropCv)).data.text) || '';
+    let dec = decideByText(text, true);
+    if (dec.action === 'remove' && (dec.reason === 'номер не распознан')) {
+        text = ((await worker.recognize(cv)).data.text) || '';
+        dec = decideByText(text, true);
     }
-
-    let text =
-        ocrResult?.data?.text ||
-        '';
-
-    let orderId =
-        findOrderIdInOcrText(
-            text,
-            orderIds
-        );
-
-    /*
-     * -------------------------------------------------------
-     * ЭТАП 2.
-     *
-     * Если сверху номер не найден,
-     * OCRируем ВСЮ страницу.
-     *
-     * При этом findOrderIdInOcrText()
-     * всё равно разрешает вернуть
-     * ТОЛЬКО номер из реестра 1С.
-     * -------------------------------------------------------
-     */
-
-    if (!orderId) {
-        try {
-            ocrResult =
-                await worker.recognize(
-                    canvas
-                );
-
-            text =
-                ocrResult?.data?.text ||
-                '';
-
-            orderId =
-                findOrderIdInOcrText(
-                    text,
-                    orderIds
-                );
-
-        } catch (error) {
-            console.warn(
-                `Полный OCR не сработал для страницы ${pageIndex + 1}`,
-                error
-            );
-        }
-    }
-
-    return {
-        pageIndex,
-        orderId
-    };
+    return dec;
 }
 
+// ===== Сортировка этикеток по названию товара =====
+function sortPagesByProductName(results) {
+    const named = [];
+    const rest = [];
+    results.forEach((r, idx) => {
+        if (!r || r.status !== 'OK') return;
+        if (r.productName) named.push({ idx, name: String(r.productName) });
+        else rest.push(idx);
+    });
+    named.sort((a, b) => {
+        const cmp = a.name.localeCompare(b.name, 'ru', { sensitivity: 'base' });
+        return cmp !== 0 ? cmp : a.idx - b.idx;
+    });
+    return named.map(x => x.idx).concat(rest);
+}
 
-/* =========================================================
-   ОБРАБОТКА PDF
-========================================================= */
+// ===== Прогресс =====
+function setProgress(done, total, note) {
+    const percent = total ? Math.round((done / total) * 100) : 0;
+    document.getElementById('progressFill').style.width = percent + '%';
+    document.getElementById('progressPercent').textContent = percent + '%';
+    document.getElementById('progressText').textContent = `Страница ${done} из ${total}`;
+    document.getElementById('progressDetails').textContent = note || '';
+}
 
-async function processPdf() {
-    if (processingActive) {
-        return;
-    }
+// ===== Главная обработка =====
+async function startProcessing() {
+    if (!allLoaded()) return;
+    processingActive = true;
 
-    if (!state.pdfFile) {
-        return;
-    }
-
-    if (!state.oneC.length) {
-        alert(
-            'Сначала загрузите реестр 1С.'
-        );
-        return;
-    }
-
-    if (
-        !state.lk ||
-        !state.lk.SheetNames ||
-        !state.lk.SheetNames.length
-    ) {
-        alert(
-            'Сначала загрузите список заказов из ЛК.'
-        );
-        return;
-    }
-
-    if (!state.priceMap.size) {
-        alert(
-            'Сначала загрузите прайс.'
-        );
-        return;
-    }
-
-    if (!state.mapping.size) {
-        rebuildMappingIfPossible();
-    }
-
-    const eligibleIds =
-        getEligibleOrderIds();
-
-    const excludedQuantityIds =
-        getExcludedQuantityOrderIds();
-
-    if (
-        !eligibleIds.length &&
-        !excludedQuantityIds.length
-    ) {
-        alert(
-            'Нет заказов, готовых к обработке.'
-        );
-        return;
-    }
-
-    processingActive =
-        true;
+    const progressSection = document.getElementById('progressSection');
+    progressSection.classList.remove('hidden');
+    progressSection.classList.add('processing');
+    document.getElementById('resultSection').classList.add('hidden');
+    document.getElementById('removedPlaque').classList.add('hidden');
+    setProgress(0, 1, 'Читаем PDF и шрифт...');
+    progressSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
     try {
-        clearStatus();
+        const pdfBytes = new Uint8Array(await state.pdfFile.arrayBuffer());
+        const pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
 
+        const fontBytes = state.fontBytes || await loadFontBytes();
+        const fontkitLib = await getFontkit();
+        if (!fontBytes || !fontkitLib) {
+            alert('Не удалось загрузить шрифт/fontkit. Убедитесь, что font-data.js и fontkit.local.js находятся в папке программы.');
+            processingActive = false;
+            progressSection.classList.add('hidden');
+            return;
+        }
+        pdfDoc.registerFontkit(fontkitLib);
+        const font = await pdfDoc.embedFont(fontBytes);
 
-        /* =====================================================
-           ЭТАП 1. ЗАГРУЖАЕМ PDF
-        ===================================================== */
+        pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL;
+        const pdfjs = await pdfjsLib.getDocument({ data: pdfBytes.slice() }).promise;
+        const totalPages = pdfjs.numPages;
+        const rotations = new Array(totalPages).fill(0);
+        const texts = new Array(totalPages).fill('');
+        const decisions = new Array(totalPages).fill(null);
 
-        setStatus(
-            'Загружаю PDF...',
-            35
-        );
+        // 1) собираем текстовый слой всех страниц (быстро)
+        for (let i = 0; i < totalPages; i++) {
+            const page = await pdfjs.getPage(i + 1);
+            rotations[i] = page.rotate || 0;
+            try {
+                const tc = await page.getTextContent();
+                texts[i] = tc.items.map(it => it.str || '').join('\n');
+            } catch (e) { texts[i] = ''; }
+            if ((i % 10) === 0 || i === totalPages - 1) setProgress(i + 1, totalPages, 'Читаем текст этикеток...');
+        }
 
-        const pdfBytes =
-            new Uint8Array(
-                await state.pdfFile.arrayBuffer()
-            );
+        // 2) решения по текстовому слою; страницы без текста идут в OCR
+        const needOcr = [];
+        for (let i = 0; i < totalPages; i++) {
+            const d = decideByText(texts[i], false);
+            if (d.needOcr) { needOcr.push(i); decisions[i] = null; }
+            else decisions[i] = d;
+        }
 
-        log(
-            `PDF: размер байтов = ${pdfBytes.length}`
-        );
-
-        log(
-            `PDF: первые байты = ${String.fromCharCode(
-                ...pdfBytes.slice(0, 5)
-            )}`
-        );
-
-        const pdf =
-            await pdfjsLib
-                .getDocument({
-                    data:
-                        new Uint8Array(
-                            pdfBytes
-                        )
-                })
-                .promise;
-
-        const pageCount =
-            pdf.numPages;
-
-        log(
-            `Страниц в исходном PDF: ${pageCount}`
-        );
-
-        log(
-            `Заказов quantity = 1: ${eligibleIds.length}`
-        );
-
-        log(
-            `Заказов quantity > 1: ${excludedQuantityIds.length}`
-        );
-
-        /*
-         * ВАЖНО:
-         *
-         * sourcePdf загружается из исходных байтов.
-         * Ничего из PDF предварительно не вырезаем.
-         */
-        const sourcePdf =
-            await PDFLib.PDFDocument.load(
-                pdfBytes
-            );
-
-
-        /* =====================================================
-           ЭТАП 2. OCR
-        ===================================================== */
-
-        setStatus(
-            'Запускаю быстрый OCR...',
-            36
-        );
-
-        const pageActions = [];
-
-        let pagesFound = 0;
-        let pagesRemoved = 0;
-        let pagesNotFound = 0;
-
-        /*
-         * КРИТИЧЕСКИ ВАЖНО:
-         *
-         * allOrderIds содержит ТОЛЬКО номера
-         * из реестра 1С.
-         *
-         * Поэтому OCR физически не может
-         * вернуть номер, которого нет в 1С.
-         */
-        const allOrderIds =
-            getAllOneCOrderIds();
-
-        log(
-            `OCR будет искать только номера из реестра 1С: ${allOrderIds.length}`
-        );
-
-        const workers =
-            await createOcrWorkers();
-
-        try {
-            let nextPageIndex = 0;
-            let completedPages = 0;
-
-            async function workerLoop(
-                worker
-            ) {
-                while (true) {
-                    const pageIndex =
-                        nextPageIndex++;
-
-                    if (
-                        pageIndex >=
-                        pageCount
-                    ) {
-                        return;
-                    }
-
-                    const result =
-                        await recognizePdfPage(
-                            pdf,
-                            pageIndex,
-                            allOrderIds,
-                            worker
-                        );
-
-                    completedPages++;
-
-                    const percent =
-                        36 +
-                        (
-                            completedPages /
-                            pageCount
-                        ) * 50;
-
-                    setStatus(
-                        `Быстрый OCR: ${completedPages} из ${pageCount}...`,
-                        percent
-                    );
-
-                    pageActions.push(
-                        result
-                    );
+        if (needOcr.length) {
+            const CPU = navigator.hardwareConcurrency || 4;
+            const POOL = Math.max(1, Math.min(CPU - 1 > 0 ? CPU - 1 : 1, 4));
+            setProgress(0, needOcr.length, `Найдены страницы без текстового слоя: ${needOcr.length}. Запускаем распознавание (OCR)...`);
+            const workers = await createOcrPool(POOL);
+            let wIdx = 0, doneOcr = 0;
+            const runOne = async (i) => {
+                const worker = workers[wIdx++ % workers.length];
+                const page = await pdfjs.getPage(i + 1);
+                decisions[i] = await ocrAndDecide(worker, page);
+                doneOcr++;
+                setProgress(doneOcr, needOcr.length, 'Распознаём номера заказов (OCR) на сканированных страницах...');
+            };
+            // простой пул параллельной обработки
+            const queue = needOcr.slice();
+            await Promise.all(Array.from({ length: Math.min(POOL, queue.length) }, async () => {
+                while (queue.length) {
+                    const i = queue.shift();
+                    await runOne(i);
                 }
-            }
-
-            await Promise.all(
-                workers.map(
-                    worker =>
-                        workerLoop(
-                            worker
-                        )
-                )
-            );
-
-        } finally {
-            await Promise.all(
-                workers.map(
-                    worker =>
-                        worker.terminate()
-                )
-            );
+            }));
+            workers.forEach(w => w.terminate());
         }
 
-
-        /* =====================================================
-           ЭТАП 3. ВОССТАНАВЛИВАЕМ ПОРЯДОК
-        ===================================================== */
-
-        pageActions.sort(
-            (a, b) =>
-                a.pageIndex -
-                b.pageIndex
-        );
-
-        const classifiedActions =
-            [];
-
-        for (
-            const result
-            of pageActions
-        ) {
-            const {
-                pageIndex,
-                orderId
-            } =
-                result;
-
-            /*
-             * Если OCR не нашёл НИ ОДНОГО
-             * номера из реестра 1С.
-             */
-            if (
-                !orderId
-            ) {
-                pagesNotFound++;
-
-                classifiedActions.push({
-                    pageIndex,
-                    orderId: null,
-                    action:
-                        'UNKNOWN'
-                });
-
-                continue;
+        // 3) применяем решения: подписываем оставшиеся этикетки
+        const results = new Array(totalPages).fill(null);
+        for (let i = 0; i < totalPages; i++) {
+            const dec = decisions[i] || { action: 'remove', reason: 'номер не распознан', display: null };
+            if (dec.action === 'keep') {
+                const skus = (state.lk.map.get(dec.orderId) || []);
+                const sku = skus[0] || '';
+                const productName = sku ? (state.price.map[sku] || null) : null;
+                if (productName) drawLabel(pdfDoc, i, font, rotations[i], productName, state.textConfig);
+                results[i] = { status: 'OK', orderId: dec.orderId, sku, productName };
+            } else {
+                results[i] = { status: 'REMOVED', reason: dec.reason, orderId: dec.display || null, page: i + 1 };
             }
-
-            /*
-             * Дополнительная страховка:
-             *
-             * даже если что-то пошло не так,
-             * номер обязан существовать
-             * в реестре 1С.
-             */
-            const oneCIdsSet =
-                new Set(
-                    allOrderIds
-                );
-
-            if (
-                !oneCIdsSet.has(
-                    orderId
-                )
-            ) {
-                pagesNotFound++;
-
-                classifiedActions.push({
-                    pageIndex,
-                    orderId: null,
-                    action:
-                        'UNKNOWN'
-                });
-
-                continue;
-            }
-
-            const item =
-                state.mapping.get(
-                    orderId
-                );
-
-            if (!item) {
-                pagesNotFound++;
-
-                classifiedActions.push({
-                    pageIndex,
-                    orderId,
-                    action:
-                        'UNKNOWN'
-                });
-
-                continue;
-            }
-
-            pagesFound++;
-
-            /*
-             * quantity > 1:
-             * физически не копируем страницу.
-             */
-            if (
-                Number(
-                    item.quantity
-                ) > 1
-            ) {
-                classifiedActions.push({
-                    pageIndex,
-                    orderId,
-                    action:
-                        'REMOVE',
-                    item
-                });
-
-                pagesRemoved++;
-
-                continue;
-            }
-
-            /*
-             * В итоговый PDF попадают только:
-             *
-             * 1. номер есть в 1С;
-             * 2. есть в mapping;
-             * 3. FOUND;
-             * 4. quantity === 1;
-             * 5. не исключён вручную.
-             */
-            if (
-                allOrderIds.includes(
-                    item.orderId
-                ) &&
-                item.status === 'FOUND' &&
-                Number(
-                    item.quantity
-                ) === 1 &&
-                !state.manualExcluded.has(
-                    item.orderId
-                )
-            ) {
-                classifiedActions.push({
-                    pageIndex,
-                    orderId,
-                    action:
-                        'DRAW',
-                    item
-                });
-
-                continue;
-            }
-
-            classifiedActions.push({
-                pageIndex,
-                orderId,
-                action:
-                    'UNKNOWN',
-                item
-            });
+            if ((i % 10) === 0 || i === totalPages - 1) setProgress(i + 1, totalPages, 'Подписываем этикетки...');
         }
 
-
-        /* =====================================================
-           ЭТАП 4. РАЗБИРАЕМ РЕЗУЛЬТАТ
-        ===================================================== */
-
-        const drawActions =
-            classifiedActions.filter(
-                action =>
-                    action.action ===
-                    'DRAW'
-            );
-
-        const removeActions =
-            classifiedActions.filter(
-                action =>
-                    action.action ===
-                    'REMOVE'
-            );
-
-        const unknownActions =
-            classifiedActions.filter(
-                action =>
-                    action.action ===
-                    'UNKNOWN'
-            );
-
-        const sortedActions =
-            [...drawActions].sort(
-                compareProductNames
-            );
-
-        const uniqueDrawOrderIds =
-            new Set(
-                sortedActions.map(
-                    action =>
-                        action.orderId
-                )
-            );
-
-        const uniqueRemovedOrderIds =
-            new Set(
-                removeActions.map(
-                    action =>
-                        action.orderId
-                )
-            );
-
-        log('');
-
-        log(
-            '========================================'
-        );
-
-        log(
-            'РЕЗУЛЬТАТ OCR'
-        );
-
-        log(
-            '========================================'
-        );
-
-        log(
-            `Страниц распознано: ${pagesFound}`
-        );
-
-        log(
-            `Уникальных заказов quantity = 1: ${uniqueDrawOrderIds.size}`
-        );
-
-        log(
-            `Страниц quantity = 1: ${sortedActions.length}`
-        );
-
-        log(
-            `Уникальных заказов quantity > 1: ${uniqueRemovedOrderIds.size}`
-        );
-
-        log(
-            `Страниц quantity > 1: ${removeActions.length}`
-        );
-
-        log(
-            `Страниц, которые не удалось определить: ${unknownActions.length}`
-        );
-
-        log(
-            '========================================'
-        );
-
-        /*
-         * Блок проверки.
-         *
-         * showUnknownOrdersBox() дополнительно
-         * фильтрует номера через реестр 1С.
-         */
-        showUnknownOrdersBox(
-            unknownActions
-        );
-
-
-        /* =====================================================
-           ЭТАП 5. НОВЫЙ PDF
-        ===================================================== */
-
-        setStatus(
-            'Собираю PDF в алфавитном порядке...',
-            90
-        );
-
-        const outputPdf =
-            await PDFLib.PDFDocument.create();
-
-        const copiedPages =
-            await outputPdf.copyPages(
-                sourcePdf,
-                sortedActions.map(
-                    action =>
-                        action.pageIndex
-                )
-            );
-
-        for (
-            const copiedPage
-            of copiedPages
-        ) {
-            outputPdf.addPage(
-                copiedPage
-            );
-        }
-
-
-        /* =====================================================
-           ЭТАП 6. НАНОСИМ НАИМЕНОВАНИЯ
-        ===================================================== */
-
-        setStatus(
-            'Наношу наименования...',
-            93
-        );
-
-        let font = null;
-
-        if (
-            sortedActions.length
-        ) {
-            const fontkit =
-                await getFontkit();
-
-            outputPdf.registerFontkit(
-                fontkit
-            );
-
-            const fontBytes =
-                await getFontBytes();
-
-            font =
-                await outputPdf.embedFont(
-                    fontBytes,
-                    {
-                        subset: true
-                    }
-                );
-        }
-
-        for (
-            let i = 0;
-            i < sortedActions.length;
-            i++
-        ) {
-            const action =
-                sortedActions[i];
-
-            const page =
-                outputPdf.getPage(
-                    i
-                );
-
-            drawLabel(
-                page,
-                font,
-                action.item.productName,
-                state.textConfig
-            );
-        }
-
-
-        /* =====================================================
-           ЭТАП 7. СОХРАНЕНИЕ
-        ===================================================== */
-
-        setStatus(
-            'Сохраняю готовый PDF...',
-            98
-        );
-
-        const outputBytes =
-            await outputPdf.save({
-                useObjectStreams:
-                    true
-            });
-
-        state.lastOutputPdf =
-            new Blob(
-                [outputBytes],
-                {
-                    type:
-                        'application/pdf'
-                }
-            );
-
-        state.processedPages =
-            sortedActions.map(
-                action => ({
-                    pageIndex:
-                        action.pageIndex,
-                    orderId:
-                        action.orderId,
-                    productName:
-                        action.item.productName,
-                    sku:
-                        action.item.sku,
-                    quantity:
-                        action.item.quantity
-                })
-            );
-
-
-        /* =====================================================
-           ИТОГ
-        ===================================================== */
-
-        log('');
-
-        log(
-            '========================================'
-        );
-
-        log(
-            'ГОТОВО'
-        );
-
-        log(
-            '========================================'
-        );
-
-        log(
-            `Уникальных заказов в готовом PDF: ${uniqueDrawOrderIds.size}`
-        );
-
-        log(
-            `Этикеток в готовом PDF: ${sortedActions.length}`
-        );
-
-        log(
-            `Удалено уникальных заказов quantity > 1: ${uniqueRemovedOrderIds.size}`
-        );
-
-        log(
-            `Удалено страниц quantity > 1: ${removeActions.length}`
-        );
-
-        log(
-            `Не попало в готовый PDF из-за нераспознанных/неподходящих страниц: ${unknownActions.length}`
-        );
-
-        log(
-            `Размер готового PDF: ${(outputBytes.length / 1024 / 1024).toFixed(2)} МБ`
-        );
-
-        log(
-            'Порядок PDF: по наименованию товара.'
-        );
-
-        log(
-            'Названия нанесены ПОСЛЕ сортировки страниц.'
-        );
-
-        log(
-            'В PDF допускаются только номера, существующие в реестре 1С.'
-        );
-
-        setStatus(
-            'Готово',
-            100
-        );
-
-        updateDownloadButtons();
-
-    } catch (error) {
-        console.error(error);
-
-        log('');
-
-        log(
-            'ОШИБКА: ' +
-            (
-                error?.message ||
-                error
-            )
-        );
-
-        setStatus(
-            'Ошибка обработки',
-            0
-        );
-
-        alert(
-            'Ошибка обработки PDF:\n\n' +
-            (
-                error?.message ||
-                error
-            )
-        );
-
-    } finally {
-        processingActive =
-            false;
+        // 4) сортировка по названию и сборка итогового PDF
+        setProgress(totalPages, totalPages, 'Сортировка по названию и сборка PDF...');
+        const pageOrder = sortPagesByProductName(results);
+        const keep = pageOrder.filter(i => results[i] && results[i].status === 'OK');
+        const outDoc = await PDFLib.PDFDocument.create();
+        // ВАЖНО: все страницы копируем ОДНИМ вызовом — внутри одного
+        // copyPages pdf-lib переиспользует общие объекты (эмблему,
+        // шрифты), и файл не раздувается копией на каждую этикетку
+        const copiedPages = await outDoc.copyPages(pdfDoc, keep);
+        copiedPages.forEach(p => outDoc.addPage(p));
+
+        // 4а) сжатие без потери качества: один и тот же тяжёлый объект
+        // (например, векторная эмблема маркетплейса) копируется в каждую
+        // этикетку и раздувает файл в десятки раз. Оставляем одну копию.
+        setProgress(totalPages, totalPages, 'Сжимаем PDF: убираем дубликаты...');
+        const dupesRemoved = dedupePdfObjects(outDoc);
+
+        const outBytes = await outDoc.save({ useObjectStreams: true, addDefaultPage: false, objectsPerTick: 50 });
+
+        // 5) скачивание PDF
+        const sizeMB = (outBytes.length / 1024 / 1024).toFixed(1);
+        const pdfBlob = new Blob([outBytes], { type: 'application/pdf' });
+        document.getElementById('downloadPdfBtn').href = URL.createObjectURL(pdfBlob);
+        document.getElementById('downloadPdfBtn').download = 'podpisannye_etiketki.pdf';
+
+        // 6) журнал Excel
+        const wb = XLSX.utils.book_new();
+        const wsData = [['Страница', 'Статус', 'Заказ', 'SKU', 'Товар', 'Причина удаления']];
+        results.forEach((r, idx) => {
+            if (!r) { wsData.push([idx + 1, 'Не обработано', '', '', '', '']); return; }
+            if (r.status === 'OK') {
+                wsData.push([idx + 1, r.productName ? '✅ Оставлена, подписана' : '✅ Оставлена (без названия)', r.orderId, r.sku || '', r.productName || '', '']);
+            } else {
+                wsData.push([idx + 1, '🚫 Удалена', r.orderId || '', '', '', r.reason]);
+            }
+        });
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(wsData), 'Журнал');
+        const logOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        document.getElementById('downloadLogBtn').href = URL.createObjectURL(new Blob([logOut], { type: 'application/octet-stream' }));
+        document.getElementById('downloadLogBtn').download = 'podpis_zhurnal.xlsx';
+
+        // 7) статистика
+        let ok = 0, removedQty = 0, removedNotReg = 0, removedOther = 0, noName = 0;
+        results.forEach(r => {
+            if (!r) return;
+            if (r.status === 'OK') {
+                ok++;
+                if (!r.productName) noName++;
+            } else if (r.reason.startsWith('кол-во')) removedQty++;
+            else if (r.reason === 'нет в реестре') removedNotReg++;
+            else removedOther++;
+        });
+
+        document.getElementById('resultStats').innerHTML =
+            `📦 Размер файла: <strong>${sizeMB} МБ</strong> · этикеток оставлено: <strong>${ok}</strong> из ${totalPages}, отсортированы по названию` +
+            (dupesRemoved ? ` · 🗜 сжато без потери качества (убрано повторов: ${dupesRemoved})` : '') +
+            (noName ? `<br>⚠️ Без названия (нет в списке ЛК или в прайсе): <strong>${noName}</strong> — подробности в таблице проверки` : '');
+        document.getElementById('resultSection').classList.remove('hidden');
+
+        // 8) плашка удалённых этикеток внизу страницы
+        renderRemovedPlaque(results, { removedQty, removedNotReg, removedOther });
+
+        setProgress(totalPages, totalPages, 'Готово!');
+        progressSection.classList.remove('processing');
+        processingActive = false;
+        document.getElementById('removedPlaque').scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    } catch (err) {
+        console.error(err);
+        processingActive = false;
+        progressSection.classList.remove('processing');
+        progressSection.classList.add('hidden');
+        alert('Ошибка обработки: ' + err.message);
     }
 }
 
+function renderRemovedPlaque(results, counts) {
+    // группы по причине: «кол-во больше 1», «нет в реестре», прочее
+    const groups = new Map();
+    results.forEach((r) => {
+        if (!r || r.status !== 'REMOVED') return;
+        const reason = r.reason.startsWith('кол-во') ? 'кол-во больше 1' : r.reason;
+        if (!groups.has(reason)) groups.set(reason, { count: 0, numbers: new Map() });
+        const g = groups.get(reason);
+        g.count++;
+        if (r.orderId) g.numbers.set(r.orderId, (g.numbers.get(r.orderId) || 0) + 1);
+    });
 
-/* =========================================================
-   EXCEL: ЗАКАЗЫ + SKU + НАИМЕНОВАНИЕ
-========================================================= */
+    const order = ['кол-во больше 1', 'нет в реестре', 'номер не распознан'];
+    const keys = [...groups.keys()].sort((a, b) => {
+        const ia = order.indexOf(a), ib = order.indexOf(b);
+        return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+    });
 
-function createOrdersAndNamesWorkbook() {
-    const dataRows = [];
+    const total = counts.removedQty + counts.removedNotReg + counts.removedOther;
+    document.getElementById('removedCount').textContent = total + ' шт.';
+    const box = document.getElementById('removedGroups');
 
-    for (
-        const oneCRow
-        of state.oneC
-    ) {
-        const item =
-            state.mapping.get(
-                oneCRow.orderId
-            );
+    if (!total) {
+        box.innerHTML = '<div class="plaque-empty">Ничего не удалено — все этикетки соответствуют заказам с количеством 1 ✨</div>';
+    } else {
+        box.innerHTML = keys.map(reason => {
+            const g = groups.get(reason);
+            const nums = [...g.numbers.entries()]
+                .map(([n, c]) => `<span class="rg-num">${escapeHtml(n)}</span>${c > 1 ? ` <span class="rg-mult">×${c}</span>` : ''}`)
+                .join(',  ');
+            return `<div class="removed-group">` +
+                `<span class="rg-label">${escapeHtml(reason)}: ${g.count}</span>` +
+                (nums ? `<span class="rg-nums">${nums}</span>` : '') +
+                `</div>`;
+        }).join('');
+    }
+    document.getElementById('removedPlaque').classList.remove('hidden');
+}
 
-        if (!item) {
-            dataRows.push({
-                orderId:
-                    oneCRow.orderId,
-                quantity:
-                    oneCRow.quantity,
-                sku: '',
-                productName: ''
-            });
+// ===== Вставка текста на этикетку =====
+function drawLabel(pdfDoc, pageIdx, font, rotation, productName, cfg) {
+    const page = pdfDoc.getPage(pageIdx);
+    const rot = normalizeAngle(rotation);
+    const mb = page.getMediaBox();
+    const mw = mb.width, mh = mb.height;
+    const { x, y } = pythonPlacement(rot, mw, mh);
+    const maxSize = Number(cfg.fontSize) || 12;
+    const fit = fitTextLayout(
+        (text, size) => font.widthOfTextAtSize(text, size),
+        productName, mw, mh, x, y, maxSize
+    );
+    page.drawText(productName, {
+        x: x - fit.shift,
+        y: y,
+        size: fit.size,
+        font: font,
+        color: parseColorLib(cfg.color),
+        rotate: PDFLib.degrees(90)
+    });
+}
 
-            continue;
-        }
+function parseColorLib(hex) {
+    const h = String(hex || '#000000').replace('#', '');
+    return PDFLib.rgb(
+        parseInt(h.substring(0, 2), 16) / 255,
+        parseInt(h.substring(2, 4), 16) / 255,
+        parseInt(h.substring(4, 6), 16) / 255
+    );
+}
 
-        if (
-            item.status === 'FOUND' &&
-            Array.isArray(item.skus) &&
-            item.skus.length
-        ) {
-            for (
-                let i = 0;
-                i < item.skus.length;
-                i++
-            ) {
-                const sku =
-                    item.skus[i];
+// ===== Инициализация =====
+document.addEventListener('DOMContentLoaded', () => {
+    setupZones();
 
-                const productName =
-                    item.productNames?.[i] ||
-                    state.priceMap.get(
-                        sku
-                    ) ||
-                    '';
+    document.getElementById('btnStartProcess').addEventListener('click', startProcessing);
+    document.getElementById('exportListBtn').addEventListener('click', exportOrdersFile);
 
-                dataRows.push({
-                    orderId:
-                        item.orderId,
-                    quantity:
-                        item.quantity,
-                    sku,
-                    productName
-                });
-            }
+    document.getElementById('cfgFontSize').addEventListener('change', (e) => {
+        let v = parseInt(e.target.value, 10);
+        if (isNaN(v)) v = 5;
+        v = Math.max(3, Math.min(20, v));
+        e.target.value = v;
+        state.textConfig.fontSize = v;
+        redrawTextPreview();
+    });
+    document.getElementById('cfgColor').addEventListener('change', (e) => {
+        state.textConfig.color = e.target.value;
+        redrawTextPreview();
+    });
+});
 
-            continue;
-        }
-
-        dataRows.push({
-            orderId:
-                item.orderId,
-            quantity:
-                item.quantity,
-            sku: '',
-            productName: ''
+(async function initFont() {
+    state.fontBytes = await loadFontBytes();
+    if (state.fontBytes) await setupPreviewFont(state.fontBytes);
+    await getFontkit();
+    if (!state.fontBytes || !window.fontkit) {
+        console.warn('Шрифт или fontkit не загрузились:', {
+            fontData: !!window.DEJAVU_FONT_B64,
+            font: !!state.fontBytes,
+            fontkit: !!window.fontkit
         });
     }
-
-
-    /* =====================================================
-       СОРТИРОВКА
-    ===================================================== */
-
-    dataRows.sort(
-        (a, b) => {
-            const nameA =
-                String(
-                    a.productName ||
-                    ''
-                ).trim();
-
-            const nameB =
-                String(
-                    b.productName ||
-                    ''
-                ).trim();
-
-            const emptyA =
-                nameA === '';
-
-            const emptyB =
-                nameB === '';
-
-            if (
-                emptyA &&
-                !emptyB
-            ) {
-                return 1;
-            }
-
-            if (
-                !emptyA &&
-                emptyB
-            ) {
-                return -1;
-            }
-
-            const result =
-                nameA.localeCompare(
-                    nameB,
-                    'ru',
-                    {
-                        sensitivity:
-                            'base',
-                        numeric:
-                            true
-                    }
-                );
-
-            if (
-                result !== 0
-            ) {
-                return result;
-            }
-
-            const orderCompare =
-                String(
-                    a.orderId
-                ).localeCompare(
-                    String(
-                        b.orderId
-                    ),
-                    'ru',
-                    {
-                        numeric:
-                            true
-                    }
-                );
-
-            if (
-                orderCompare !== 0
-            ) {
-                return orderCompare;
-            }
-
-            return String(
-                a.sku
-            ).localeCompare(
-                String(
-                    b.sku
-                ),
-                'ru',
-                {
-                    numeric:
-                        true
-                }
-            );
-        }
-    );
-
-
-    /* =====================================================
-       РОВНО 3 КОЛОНКИ
-    ===================================================== */
-
-    const rows = [
-        [
-            'Номер заказа',
-            'SKU',
-            'Наименование'
-        ]
-    ];
-
-    for (
-        const item
-        of dataRows
-    ) {
-        rows.push([
-            item.orderId,
-            item.sku,
-            item.productName
-        ]);
-    }
-
-
-    const worksheet =
-        XLSX.utils.aoa_to_sheet(
-            rows
-        );
-
-
-    /* =====================================================
-       ЗАГОЛОВКИ
-    ===================================================== */
-
-    for (
-        let c = 0;
-        c < rows[0].length;
-        c++
-    ) {
-        const cell =
-            worksheet[
-                XLSX.utils.encode_cell({
-                    r: 0,
-                    c
-                })
-            ];
-
-        if (cell) {
-            cell.s = {
-                font: {
-                    bold: true
-                }
-            };
-        }
-    }
-
-
-    /* =====================================================
-       quantity > 1 — ЖЁЛТЫЕ СТРОКИ
-    ===================================================== */
-
-    for (
-        let r = 1;
-        r < rows.length;
-        r++
-    ) {
-        const orderId =
-            normalizeOrderId(
-                rows[r][0]
-            );
-
-        const item =
-            state.mapping.get(
-                orderId
-            );
-
-        if (
-            item &&
-            Number(
-                item.quantity
-            ) > 1
-        ) {
-            for (
-                let c = 0;
-                c < rows[r].length;
-                c++
-            ) {
-                const cell =
-                    worksheet[
-                        XLSX.utils.encode_cell({
-                            r,
-                            c
-                        })
-                    ];
-
-                if (cell) {
-                    cell.s = {
-                        fill: {
-                            fgColor: {
-                                rgb:
-                                    'FFF2CC'
-                            }
-                        },
-                        font: {
-                            color: {
-                                rgb:
-                                    '7F6000'
-                            }
-                        }
-                    };
-                }
-            }
-        }
-    }
-
-
-    worksheet['!cols'] = [
-        {
-            wch: 22
-        },
-        {
-            wch: 18
-        },
-        {
-            wch: 70
-        }
-    ];
-
-
-    const workbook =
-        XLSX.utils.book_new();
-
-    XLSX.utils.book_append_sheet(
-        workbook,
-        worksheet,
-        'Заказы и наименования'
-    );
-
-    const output =
-        XLSX.write(
-            workbook,
-            {
-                bookType:
-                    'xlsx',
-                type:
-                    'array'
-            }
-        );
-
-    return new Blob(
-        [output],
-        {
-            type:
-                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        }
-    );
-}
-
-
-/* =========================================================
-   СКАЧИВАНИЕ
-========================================================= */
-
-function downloadWithPrefix(
-    blob,
-    filename
-) {
-    let finalName =
-        String(filename);
-
-    const prefix =
-        window.DOWNLOAD_PREFIX ||
-        'шк-';
-
-    if (
-        !finalName.startsWith(
-            prefix
-        )
-    ) {
-        finalName =
-            prefix +
-            finalName;
-    }
-
-    const url =
-        URL.createObjectURL(
-            blob
-        );
-
-    const a =
-        document.createElement(
-            'a'
-        );
-
-    a.href =
-        url;
-
-    a.download =
-        finalName;
-
-    document.body.appendChild(
-        a
-    );
-
-    a.click();
-
-    a.remove();
-
-    setTimeout(
-        () =>
-            URL.revokeObjectURL(
-                url
-            ),
-        1000
-    );
-}
-
-
-function downloadOrdersAndNames() {
-    if (
-        !state.oneC.length ||
-        !state.mapping.size
-    ) {
-        alert(
-            'Сначала загрузите реестр 1С, список ЛК и прайс.'
-        );
-
-        return;
-    }
-
-    const blob =
-        createOrdersAndNamesWorkbook();
-
-    state.lastOrdersXlsx =
-        blob;
-
-    downloadWithPrefix(
-        blob,
-        'заказы и наименования.xlsx'
-    );
-}
-
-
-function downloadLabels() {
-    if (
-        !state.lastOutputPdf
-    ) {
-        alert(
-            'Готовый PDF ещё не сформирован.'
-        );
-
-        return;
-    }
-
-    downloadWithPrefix(
-        state.lastOutputPdf,
-        'готовые-этикетки.pdf'
-    );
-}
-
-
-/* =========================================================
-   КНОПКИ
-========================================================= */
-
-function updateDownloadButtons() {
-    const ordersBtn =
-        document.getElementById(
-            'downloadOrdersNamesBtn'
-        );
-
-    const labelsBtn =
-        document.getElementById(
-            'downloadLabelsBtn'
-        );
-
-    if (ordersBtn) {
-        ordersBtn.disabled =
-            !(
-                state.oneC.length &&
-                state.lk &&
-                state.lk.SheetNames &&
-                state.lk.SheetNames.length &&
-                state.priceMap.size &&
-                state.mapping.size
-            );
-    }
-
-    if (labelsBtn) {
-        labelsBtn.disabled =
-            !state.lastOutputPdf;
-    }
-}
-
-
-/* =========================================================
-   ГАЛОЧКА ПОСЛЕ ЗАГРУЗКИ
-========================================================= */
-
-function markFileLoaded(
-    input,
-    file
-) {
-    if (!input) return;
-
-    let container =
-        input.closest('label');
-
-    if (
-        !container &&
-        input.id
-    ) {
-        try {
-            container =
-                document.querySelector(
-                    `label[for="${CSS.escape(input.id)}"]`
-                );
-        } catch (error) {
-            container = null;
-        }
-    }
-
-    if (!container) {
-        container =
-            input.parentElement;
-    }
-
-    if (!container) return;
-
-    const oldMark =
-        container.querySelector(
-            '.file-loaded-mark'
-        );
-
-    if (oldMark) {
-        oldMark.remove();
-    }
-
-    const mark =
-        document.createElement(
-            'span'
-        );
-
-    mark.className =
-        'file-loaded-mark';
-
-    mark.textContent =
-        ' ✓';
-
-    mark.title =
-        `Загружен: ${file.name}`;
-
-    mark.style.cssText = `
-        color: #16a34a;
-        font-weight: 800;
-        font-size: 20px;
-        margin-left: 8px;
-        display: inline-block;
-        vertical-align: middle;
-        line-height: 1;
-    `;
-
-    container.appendChild(
-        mark
-    );
-}
-
-
-/* =========================================================
-   ЛИЛОВЫЕ ПЛАШКИ
-   HTML НЕ ТРОГАЕМ
-========================================================= */
-
-function styleFileCards() {
-    const inputIds = [
-        'orders1cFile',
-        'lkFile',
-        'priceFile',
-        'pdfFile'
-    ];
-
-    for (
-        const inputId
-        of inputIds
-    ) {
-        const input =
-            document.getElementById(
-                inputId
-            );
-
-        if (!input) {
-            continue;
-        }
-
-        let container =
-            input.closest('label');
-
-        if (
-            !container &&
-            input.id
-        ) {
-            try {
-                container =
-                    document.querySelector(
-                        `label[for="${CSS.escape(input.id)}"]`
-                    );
-            } catch (error) {
-                container = null;
-            }
-        }
-
-        if (!container) {
-            container =
-                input.parentElement;
-        }
-
-        if (!container) {
-            continue;
-        }
-
-        container.style.border =
-            '2px solid #b58cff';
-
-        container.style.borderRadius =
-            '14px';
-
-        container.style.boxShadow =
-            '0 0 0 1px rgba(181, 140, 255, 0.12), 0 4px 14px rgba(120, 80, 180, 0.08)';
-
-        container.style.transition =
-            'border-color .2s ease, box-shadow .2s ease';
-
-        container.addEventListener(
-            'mouseenter',
-            function () {
-                container.style.borderColor =
-                    '#9b6cff';
-
-                container.style.boxShadow =
-                    '0 0 0 3px rgba(181, 140, 255, 0.15), 0 6px 18px rgba(120, 80, 180, 0.12)';
-            }
-        );
-
-        container.addEventListener(
-            'mouseleave',
-            function () {
-                container.style.borderColor =
-                    '#b58cff';
-
-                container.style.boxShadow =
-                    '0 0 0 1px rgba(181, 140, 255, 0.12), 0 4px 14px rgba(120, 80, 180, 0.08)';
-            }
-        );
-    }
-}
-
-
-/* =========================================================
-   СОБЫТИЯ
-========================================================= */
-
-function bindInput(
-    inputId,
-    handler
-) {
-    const input =
-        document.getElementById(
-            inputId
-        );
-
-    if (!input) {
-        console.warn(
-            `Не найден input #${inputId}`
-        );
-
-        return;
-    }
-
-    input.addEventListener(
-        'change',
-        async function () {
-            const file =
-                this.files?.[0];
-
-            if (!file) {
-                return;
-            }
-
-            try {
-                await handler(file);
-
-                markFileLoaded(
-                    this,
-                    file
-                );
-
-                updateDownloadButtons();
-
-            } catch (error) {
-                console.error(
-                    error
-                );
-
-                log(
-                    'ОШИБКА: ' +
-                    (
-                        error?.message ||
-                        error
-                    )
-                );
-
-                alert(
-                    error?.message ||
-                    error
-                );
-            }
-        }
-    );
-}
-
-
-/* =========================================================
-   ЗАПУСК
-========================================================= */
-
-document.addEventListener(
-    'DOMContentLoaded',
-    function () {
-        bindInput(
-            'orders1cFile',
-            handleOneCFile
-        );
-
-        bindInput(
-            'lkFile',
-            handleLKFile
-        );
-
-        bindInput(
-            'priceFile',
-            handlePriceFile
-        );
-
-        bindInput(
-            'pdfFile',
-            handlePdfFile
-        );
-
-        const ordersBtn =
-            document.getElementById(
-                'downloadOrdersNamesBtn'
-            );
-
-        const labelsBtn =
-            document.getElementById(
-                'downloadLabelsBtn'
-            );
-
-        if (ordersBtn) {
-            ordersBtn.addEventListener(
-                'click',
-                downloadOrdersAndNames
-            );
-        }
-
-        if (labelsBtn) {
-            labelsBtn.addEventListener(
-                'click',
-                downloadLabels
-            );
-        }
-
-        styleFileCards();
-
-        updateDownloadButtons();
-    }
-);
-
-
-/* =========================================================
-   ПЕРЕД ЗАКРЫТИЕМ
-========================================================= */
-
-window.addEventListener(
-    'beforeunload',
-    function () {
-        state.lastOutputPdf = null;
-        state.lastOrdersXlsx = null;
-    }
-);
+})();

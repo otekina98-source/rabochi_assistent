@@ -1,649 +1,167 @@
 <!DOCTYPE html>
-
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>🖨️ Подпись этикеток</title>
-
-<link
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
-    rel="stylesheet"
->
-
-<style>
-    body {
-        margin: 0;
-        min-height: 100vh;
-        background: #f4f0ff;
-        font-family: Arial, sans-serif;
-        color: #000000;
-    }
-
-    .main-container {
-        width: 100%;
-        max-width: 1150px;
-        margin: 0 auto;
-        padding: 20px 25px 50px;
-    }
-
-    .page-title {
-        text-align: left;
-        font-size: 30px;
-        font-weight: 700;
-        margin-bottom: 25px;
-        color: #000000;
-    }
-
-    .instruction {
-        background: #fff;
-        border-radius: 18px;
-        padding: 20px 24px;
-        margin-bottom: 22px;
-        box-shadow: 0 5px 20px rgba(70, 50, 110, .08);
-        border: 1px solid rgba(120, 100, 180, .12);
-    }
-
-    .instruction-text {
-        font-size: 14px;
-        line-height: 1.6;
-        color: #000000;
-    }
-
-    .instruction-text div {
-        margin-bottom: 6px;
-    }
-
-    .cards-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 22px;
-    }
-
-    .tool-card {
-        background: #fff;
-        border-radius: 18px;
-        padding: 25px;
-        box-shadow: 0 5px 20px rgba(70, 50, 110, .08);
-        border: 1px solid rgba(120, 100, 180, .12);
-        min-height: 235px;
-        display: flex;
-        flex-direction: column;
-    }
-
-    .tool-card h3 {
-        margin: 0 0 10px;
-        font-size: 21px;
-        font-weight: 700;
-        color: #000000;
-    }
-
-    .tool-card p {
-        margin: 0 0 18px;
-        color: #000000;
-        line-height: 1.5;
-        font-size: 14px;
-    }
-
-    .drop-zone {
-        margin-top: auto;
-        border: 2px dashed #b9a9df;
-        border-radius: 14px;
-        padding: 22px 15px;
-        text-align: center;
-        background: #faf8ff;
-        cursor: pointer;
-        transition: all .2s ease;
-    }
-
-    .drop-zone:hover,
-    .drop-zone.dragover {
-        background: #f0ebff;
-        border-color: #8067c7;
-    }
-
-    .drop-zone input[type="file"] {
-        display: none;
-    }
-
-    .drop-zone-title {
-        font-size: 15px;
-        font-weight: 600;
-        color: #000000;
-    }
-
-    .drop-zone-subtitle {
-        margin-top: 5px;
-        font-size: 12px;
-        color: #000000;
-    }
-
-    .file-name {
-        margin-top: 10px;
-        font-size: 13px;
-        color: #000000;
-        word-break: break-word;
-    }
-
-    .downloads {
-        margin-top: 25px;
-        background: #fff;
-        border-radius: 18px;
-        padding: 25px;
-        box-shadow: 0 5px 20px rgba(70, 50, 110, .08);
-        border: 1px solid rgba(120, 100, 180, .12);
-    }
-
-    .downloads-title {
-        text-align: center;
-        font-size: 20px;
-        font-weight: 700;
-        margin-bottom: 18px;
-        color: #000000;
-    }
-
-    .download-buttons {
-        display: flex;
-        justify-content: center;
-        flex-wrap: wrap;
-        gap: 12px;
-    }
-
-    .btn-main {
-        background: #8067c7;
-        border: 1px solid #8067c7;
-        color: #fff;
-        border-radius: 10px;
-        padding: 10px 18px;
-        font-weight: 600;
-    }
-
-    .btn-main:hover {
-        background: #6f55b7;
-        border-color: #6f55b7;
-        color: #fff;
-    }
-
-    .btn-final {
-        background: #6552a5;
-        border: 1px solid #6552a5;
-        color: #fff;
-        border-radius: 10px;
-        padding: 10px 18px;
-        font-weight: 600;
-    }
-
-    .btn-final:hover {
-        background: #53418e;
-        border-color: #53418e;
-        color: #fff;
-    }
-
-    button:disabled {
-        opacity: .45;
-        cursor: not-allowed;
-    }
-
-    .status-box {
-        display: none;
-        margin-top: 22px;
-        background: #fff;
-        border-radius: 18px;
-        padding: 20px;
-        box-shadow: 0 5px 20px rgba(70, 50, 110, .08);
-    }
-
-    .status-box.show {
-        display: block;
-    }
-
-    .status-title {
-        font-weight: 700;
-        margin-bottom: 12px;
-        color: #000000;
-    }
-
-    .progress {
-        height: 8px;
-        border-radius: 10px;
-        background: #e7e1f5;
-    }
-
-    .progress-bar {
-        background: #8067c7;
-    }
-
-    .log {
-        margin-top: 12px;
-        max-height: 220px;
-        overflow-y: auto;
-        padding: 12px;
-        border-radius: 10px;
-        background: #faf9fd;
-        font-size: 13px;
-        white-space: pre-wrap;
-        color: #000000;
-    }
-
-    @media (max-width: 750px) {
-        .cards-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .page-title {
-            font-size: 25px;
-        }
-
-        .download-buttons {
-            flex-direction: column;
-        }
-
-        .download-buttons button {
-            width: 100%;
-        }
-
-        .top-menu {
-            justify-content: center;
-        }
-    }
-</style>
-
+    <title>Подпись этикеток — Рабочий Ассистент</title>
+    <link rel="stylesheet" href="styles.css?v=2">
+    <link rel="stylesheet" href="../../../assets/site.css?v=2">
+    <link rel="stylesheet" href="../../../assets/themes.css">
+    <script>try{document.documentElement.setAttribute("data-theme",localStorage.getItem("ra-theme")||"light")}catch(e){}</script>
 </head>
-
 <body>
+    <div class="container">
+        <button class="back-btn" onclick="window.location.href='../../../index.html'">← В меню</button>
 
-<div class="main-container">
-
-<div class="page-title">
-    🖨️ Подпись этикеток
-</div>
-
-<div class="instruction">
-
-    <div class="instruction-text">
-
-        <div>
-            <strong>1.</strong>
-            Загрузите эксель-файл, который вы сделали из реестра 1С. В нем
-            <strong>обязательно</strong> должны быть столбики
-            <strong>«Идентификатор МП»</strong> и
-            <strong>«Количество»</strong>.
+        <div class="sverka-header">
+            <h2><span class="e">🖨️</span> Подпись этикеток</h2>
+            <p class="subtitle">ЯндексМаркет · подпись этикеток</p>
         </div>
 
-        <div>
-            <strong>2.</strong>
-            Скачайте список заказов из ЛК. Ничего менять в файле не нужно.
-            Просто загрузите его в плашку
-            <strong>Список заказов из ЛК.</strong>
+        <!-- ===== 4 окна загрузки ===== -->
+        <div class="uploads-grid">
+
+            <!-- 1. Реестр 1С -->
+            <div class="panel upload-panel">
+                <div class="panel-header"><h3>📋 Реестр 1С</h3></div>
+                <div class="panel-body">
+                    <p class="upload-hint">Вставь или перетащи <strong>реестр 1С</strong> с правильным количеством заказов. В файле <strong>обязательно</strong> должны быть столбики <strong>«Идентификатор МП»</strong> и <strong>«Количество»</strong>. Для подписи остаются заказы, где количество равно 1.</p>
+                    <div class="drop-zone" id="reestrDropZone">
+                        <span class="dz-icon">📄</span>
+                        <p class="dz-title">Вставь или перетащи реестр 1С</p>
+                        <p class="dz-sub">Excel: .xlsx, .xls</p>
+                        <input type="file" accept=".xlsx,.xls" id="reestrInput" hidden>
+                    </div>
+                    <div class="load-stats hidden" id="reestrStats"></div>
+                    <button class="reset-zone-btn hidden" id="reestrReset" type="button">🔄 Загрузить другой файл</button>
+                </div>
+            </div>
+
+            <!-- 2. Этикетки -->
+            <div class="panel upload-panel">
+                <div class="panel-header"><h3>🏷️ Этикетки</h3></div>
+                <div class="panel-body">
+                    <p class="upload-hint">Вставь <strong>файл с этикетками</strong> (PDF). Останутся только этикетки заказов с количеством 1 из реестра — остальные удалятся, а внизу страницы появится список с причинами.</p>
+                    <div class="drop-zone" id="labelsDropZone">
+                        <span class="dz-icon">🏷️</span>
+                        <p class="dz-title">Вставь файл с этикетками</p>
+                        <p class="dz-sub">PDF</p>
+                        <input type="file" accept=".pdf" id="labelsInput" hidden>
+                    </div>
+                    <div class="load-stats hidden" id="labelsStats"></div>
+                    <button class="reset-zone-btn hidden" id="labelsReset" type="button">🔄 Загрузить другой файл</button>
+                </div>
+            </div>
+
+            <!-- 3. Прайс -->
+            <div class="panel upload-panel">
+                <div class="panel-header"><h3>💰 Прайс</h3></div>
+                <div class="panel-body">
+                    <p class="upload-hint">Вставь <strong>прайс</strong>. Не забывайте его обновлять!</p>
+                    <div class="drop-zone" id="priceDropZone">
+                        <span class="dz-icon">💰</span>
+                        <p class="dz-title">Вставь прайс</p>
+                        <p class="dz-sub">Excel: .xlsx, .xls</p>
+                        <input type="file" accept=".xlsx,.xls" id="priceInput" hidden>
+                    </div>
+                    <div class="load-stats hidden" id="priceStats"></div>
+                    <button class="reset-zone-btn hidden" id="priceReset" type="button">🔄 Загрузить другой файл</button>
+                </div>
+            </div>
+
+            <!-- 4. Список заказов из ЛК -->
+            <div class="panel upload-panel">
+                <div class="panel-header"><h3>📦 Список заказов из ЛК</h3></div>
+                <div class="panel-body">
+                    <p class="upload-hint">Вставь <strong>список заказов из ЛК</strong>.</p>
+                    <div class="drop-zone" id="lkDropZone">
+                        <span class="dz-icon">📦</span>
+                        <p class="dz-title">Вставь список заказов</p>
+                        <p class="dz-sub">Excel: .xlsx, .xls</p>
+                        <input type="file" accept=".xlsx,.xls" id="lkInput" hidden>
+                    </div>
+                    <div class="load-stats hidden" id="lkStats"></div>
+                    <button class="reset-zone-btn hidden" id="lkReset" type="button">🔄 Загрузить другой файл</button>
+                </div>
+            </div>
         </div>
 
-        <div>
-            <strong>3.</strong>
-            Загрузите <strong>«Прайс»</strong>. При необходимости обновите его.
+        <!-- ===== Кнопка выгрузки «Заказы и наименования» ===== -->
+        <div class="export-row">
+            <button class="export-btn start-btn" id="exportListBtn" type="button" disabled>📥 Скачать файл «Заказы и наименования»</button>
+            <span class="hint" id="exportHint">Нужны: реестр 1С, прайс и список заказов из ЛК</span>
         </div>
 
-        <div>
-            <strong>4.</strong>
-            Загрузите файл с этикетками, которые вы скачали из ЛК.
+        <!-- ===== Настройка этикетки и запуск ===== -->
+        <div class="panel settings-panel">
+            <div class="panel-header"><h3>⚙️ Подпись и запуск</h3></div>
+            <div class="panel-body">
+                <div class="settings-grid">
+                    <div class="settings-controls">
+                        <div class="cfg-row">
+                            <div class="cfg-field">
+                                <label for="cfgFontSize">Макс. размер текста</label>
+                                <input type="number" id="cfgFontSize" value="5" min="3" max="20">
+                            </div>
+                            <div class="cfg-field">
+                                <label for="cfgColor">Цвет</label>
+                                <select id="cfgColor">
+                                    <option value="#000000" selected>Чёрный</option>
+                                    </select>
+                            </div>
+                        </div>
+                        <p class="cfg-hint">Название вставляется автоматически одной строкой внизу этикетки (под штрихкодом). Размер подбирается под длину названия: максимально крупный, но строка помещается целиком. Готовые этикетки сортируются по алфавиту по наименованию товара.</p>
+                        <button class="start-btn" id="btnStartProcess" disabled>🚀 Начать обработку</button>
+                        <p id="startHint">Загрузите все 4 файла: реестр 1С, этикетки, прайс и список заказов из ЛК.</p>
+                    </div>
+                    <div class="preview-box hidden" id="previewBox">
+                        <div id="previewWrapper"><canvas id="pdfCanvas"></canvas></div>
+                        <p class="hint">Так будет выглядеть подпись на первой этикетке</p>
+                    </div>
+                </div>
+            </div>
         </div>
 
-    </div>
-</div>
-
-<div class="cards-grid">
-
-    <div class="tool-card">
-
-        <h3>1. Реестр 1С</h3>
-
-        <p>
-            Загрузите эксель-файл, который вы сделали из реестра 1С.
-            Из 1С используются:
-            <strong>Идентификатор МП</strong> и
-            <strong>Количество</strong>.
-        </p>
-
-        <label class="drop-zone" id="orders1cDropZone">
-
-            <input
-                type="file"
-                id="orders1cFile"
-                accept=".xlsx,.xls,.csv"
-            >
-
-            <div class="drop-zone-title">
-                📂 Загрузить реестр 1С
+        <!-- ===== Прогресс ===== -->
+        <div class="progress-section hidden" id="progressSection">
+            <div class="progress-stats">
+                <span id="progressText">Обработка...</span>
+                <span id="progressPercent">0%</span>
             </div>
+            <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+            <div class="progress-details" id="progressDetails"></div>
+        </div>
 
-            <div class="drop-zone-subtitle">
-                Перетащите файл сюда или нажмите для выбора
+        <!-- ===== Результат ===== -->
+        <div class="result-section hidden" id="resultSection">
+            <h3>✅ Готово!</h3>
+            <p class="result-stats" id="resultStats"></p>
+            <div class="result-buttons">
+                <a class="start-btn" id="downloadPdfBtn">📄 Скачать PDF</a>
+                <a class="export-btn" id="downloadLogBtn">📊 Скачать журнал</a>
+                <button class="export-btn" type="button" onclick="location.reload()">🔄 Новая обработка</button>
             </div>
+        </div>
 
-            <div class="file-name" id="orders1cFileName"></div>
-
-        </label>
-
+        <!-- ===== Плашка удалённых этикеток (внизу) ===== -->
+        <div class="removed-plaque hidden" id="removedPlaque">
+            <div class="plaque-head">🚫 Удалённые этикетки — <span id="removedCount"></span></div>
+            <div class="removed-groups" id="removedGroups"></div>
+        </div>
     </div>
 
-    <div class="tool-card">
-
-        <h3>2. Список заказов из ЛК</h3>
-
-        <p>
-            Загрузите файл сюда.
-            Ничего менять не нужно.
-        </p>
-
-        <label class="drop-zone" id="lkDropZone">
-
-            <input
-                type="file"
-                id="lkFile"
-                accept=".xlsx,.xls,.csv"
-            >
-
-            <div class="drop-zone-title">
-                📂 Загрузить список заказов из ЛК
-            </div>
-
-            <div class="drop-zone-subtitle">
-                Перетащите файл сюда или нажмите для выбора
-            </div>
-
-            <div class="file-name" id="lkFileName"></div>
-
-        </label>
-
-    </div>
-
-    <div class="tool-card">
-
-        <h3>3. Прайс</h3>
-
-        <p>
-            Загрузите прайс. При необходимости обновите его.
-        </p>
-
-        <label class="drop-zone" id="priceDropZone">
-
-            <input
-                type="file"
-                id="priceFile"
-                accept=".xlsx,.xls,.csv"
-            >
-
-            <div class="drop-zone-title">
-                📂 Загрузить прайс
-            </div>
-
-            <div class="drop-zone-subtitle">
-                Перетащите файл сюда или нажмите для выбора
-            </div>
-
-            <div class="file-name" id="priceFileName"></div>
-
-        </label>
-
-    </div>
-
-    <div class="tool-card">
-
-        <h3>4. Этикетки</h3>
-
-        <p>
-            Загрузите PDF с этикетками.
-            После загрузки программа найдёт номера заказов
-            и нанесёт соответствующие наименования товаров.
-        </p>
-
-        <label class="drop-zone" id="pdfDropZone">
-
-            <input
-                type="file"
-                id="pdfFile"
-                accept=".pdf"
-            >
-
-            <div class="drop-zone-title">
-                📄 Загрузить этикетки PDF
-            </div>
-
-            <div class="drop-zone-subtitle">
-                Перетащите PDF сюда или нажмите для выбора
-            </div>
-
-            <div class="file-name" id="pdfFileName"></div>
-
-        </label>
-
-    </div>
-
-</div>
-
-<div class="downloads">
-
-    <div class="downloads-title">
-        📥 Скачать файлы
-    </div>
-
-    <div class="download-buttons">
-
-        <button
-            type="button"
-            class="btn btn-main"
-            id="downloadOrdersNamesBtn"
-            disabled
-        >
-            Скачать заказы и наименования
-        </button>
-
-        <button
-            type="button"
-            class="btn btn-final"
-            id="downloadLabelsBtn"
-            disabled
-        >
-            Скачать готовые этикетки
-        </button>
-
-    </div>
-
-</div>
-
-<div class="status-box" id="statusBox">
-
-    <div class="status-title" id="statusTitle">
-        Обработка
-    </div>
-
-    <div class="progress">
-
-        <div
-            class="progress-bar"
-            id="progressBar"
-            role="progressbar"
-            style="width: 0%;"
-        ></div>
-
-    </div>
-
-    <div class="log" id="log"></div>
-
-</div>
-```
-
-</div>
-
-<script src="font-data.js"></script>
-
-<script src="fontkit.local.js"></script>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-
-<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
-
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
-
-<script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-
-<script>
-
-    window.DOWNLOAD_PREFIX = 'шк-';
-
-    function setFileName(inputId, outputId) {
-
-        const input = document.getElementById(inputId);
-        const output = document.getElementById(outputId);
-
-        if (!input || !output) {
-            return;
-        }
-
-        input.addEventListener('change', function () {
-
-            output.textContent =
-                this.files?.length
-                    ? this.files[0].name
-                    : '';
-
-        });
-    }
-
-    function setupDropZone(zoneId, inputId) {
-
-        const zone = document.getElementById(zoneId);
-        const input = document.getElementById(inputId);
-
-        if (!zone || !input) {
-            return;
-        }
-
-        zone.addEventListener('dragover', function (event) {
-
-            event.preventDefault();
-            zone.classList.add('dragover');
-
-        });
-
-        zone.addEventListener('dragleave', function () {
-
-            zone.classList.remove('dragover');
-
-        });
-
-        zone.addEventListener('drop', function (event) {
-
-            event.preventDefault();
-            zone.classList.remove('dragover');
-
-            if (!event.dataTransfer.files.length) {
-                return;
-            }
-
-            try {
-
-                const dataTransfer = new DataTransfer();
-
-                for (const file of event.dataTransfer.files) {
-                    dataTransfer.items.add(file);
-                }
-
-                input.files = dataTransfer.files;
-
-                input.dispatchEvent(
-                    new Event('change', {
-                        bubbles: true
-                    })
-                );
-
-            } catch (error) {
-
-                console.error(error);
-
-            }
-
-        });
-    }
-
-    window.downloadWithPrefix = function (blob, filename) {
-
-        if (!blob) {
-            return;
-        }
-
-        filename = String(filename || 'файл');
-
-        if (!filename.startsWith('шк-')) {
-            filename = 'шк-' + filename;
-        }
-
-        const url = URL.createObjectURL(blob);
-
-        const a = document.createElement('a');
-
-        a.href = url;
-        a.download = filename;
-
-        document.body.appendChild(a);
-
-        a.click();
-
-        a.remove();
-
-        setTimeout(
-            () => URL.revokeObjectURL(url),
-            1000
-        );
-    };
-
-    document.addEventListener('DOMContentLoaded', function () {
-
-        setFileName(
-            'orders1cFile',
-            'orders1cFileName'
-        );
-
-        setFileName(
-            'lkFile',
-            'lkFileName'
-        );
-
-        setFileName(
-            'priceFile',
-            'priceFileName'
-        );
-
-        setFileName(
-            'pdfFile',
-            'pdfFileName'
-        );
-
-        setupDropZone(
-            'orders1cDropZone',
-            'orders1cFile'
-        );
-
-        setupDropZone(
-            'lkDropZone',
-            'lkFile'
-        );
-
-        setupDropZone(
-            'priceDropZone',
-            'priceFile'
-        );
-
-        setupDropZone(
-            'pdfDropZone',
-            'pdfFile'
-        );
-
-    });
-
-</script>
-
-<script src="app.js"></script>
-
+    <script src="font-data.js?v=2"></script>
+    <script src="font-data-bold.js?v=2"></script>
+    <script src="fontkit.local.js?v=2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="xlsx.styles.bundle.js?v=2"></script>
+    <script>window.XLSX_STYLED = window.XLSX;</script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.18.5/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <script src="app.js?v=7"></script>
+
+    <script src="../../../assets/audio.js?v=4"></script>
+    <script src="../../../assets/themes.js"></script>
+    <script src="../../../assets/theme.js"></script>
 </body>
 </html>
