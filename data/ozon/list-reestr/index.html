@@ -3,114 +3,513 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Сверка Лист отгрузки и реестр</title>
+
+    <title>Сверка Лист отгрузки и реестр — ОЗОН</title>
+
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="../../../assets/site.css?v=2">
+    <link rel="stylesheet" href="../../../assets/themes.css">
+
+    <script>
+        try {
+            document.documentElement.setAttribute(
+                "data-theme",
+                localStorage.getItem("ra-theme") || "light"
+            );
+        } catch (e) {}
+    </script>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
+
 <body>
+
     <div class="container">
-        <button class="back-btn" onclick="window.location.href='index.html'">← В меню</button>
-        
+
+        <!-- Кнопка назад -->
+        <button
+            class="back-btn"
+            onclick="window.location.href='../../../index.html'"
+        >
+            ← В меню
+        </button>
+
+
+        <!-- Заголовок -->
         <div class="sverka-header">
-            <h2>Сверка Лист отгрузки и реестр</h2>
-            <p class="subtitle">Сравнение номеров заказов между 1С и Листом отгрузки • ОЗОН ДМД</p>
+
+            <h2>
+                Сверка Лист отгрузки и реестр
+            </h2>
+
+            <p class="subtitle">
+                Сравнение номеров заказов между 1С и Листом отгрузки • ОЗОН ДМД
+            </p>
+
         </div>
 
+
+        <!-- Основной блок -->
         <div class="sverka-layout">
-            <div class="panel instruction-panel">
+
+
+            <!-- 1. Инструкция -->
+            <div class="panel guide-panel">
+
                 <div class="panel-header">
-                    <h3>📖 Как пользоваться сверкой</h3>
+
+                    <h3>
+                        📖 Как пользоваться сверкой
+                    </h3>
+
                 </div>
+
+
                 <div class="panel-body">
-                    <!-- Баннер перед инструкцией -->
-                    <div class="banner-inline">
-                        <strong>СКАЧИВАЙТЕ ЛИСТ ОТГРУЗКИ И СВЕРЯЙТЕ ПО НЕМУ</strong>
+
+
+                    <div class="guide-main-btn">
+
+                        СКАЧИВАЙТЕ ЛИСТ ОТГРУЗКИ И
+                        <br>
+                        СВЕРЯЙТЕ ПО НЕМУ
+
                     </div>
 
-                    <ol class="instruction-steps">
-                        <li><span class="step-num">1</span> <div class="step-text">Сформируйте отгрузку в ЛК Ozon.</div></li>
-                        <li><span class="step-num">2</span> <div class="step-text">Скачайте <strong>Лист отгрузки</strong> после формирования отгрузки.</div></li>
-                        <li><span class="step-num">3</span> <div class="step-text">Загрузите скачанный <strong>Лист отгрузки</strong> в поле «Лист отгрузки».</div></li>
-                        <li><span class="step-num">4</span> <div class="step-text">Вставьте номера заказов из 1С из столбика «Телефон 1» в поле «Номера заказов из 1С».</div></li>
-                        <li><span class="step-num">5</span> <div class="step-text">Нажмите «Начать сверку».</div></li>
-                        <li><span class="step-num">6</span> <div class="step-text">Дождитесь окончания обработки и ознакомьтесь с результатами ниже.</div></li>
-                    </ol>
 
-                    <!-- Предупреждение вынесено отдельно -->
-                    <div class="warning-banner">
-                        <div class="warning-icon">⚠️</div>
-                        <div class="warning-content">
-                            <strong>Предупреждение</strong>
-                            <p>Возникают сложности с обработкой заказов от 1000 и более.<br>
-                            В таких случаях просьба пользоваться сверкой, которая находится в папке ОЗОН ДМД и называется «Ozon сверка».</p>
+                    <div class="guide-list">
+
+
+                        <div class="guide-step">
+
+                            <span class="guide-number">
+                                1
+                            </span>
+
+                            <span>
+                                Сформируйте отгрузку в ЛК Ozon.
+                            </span>
+
                         </div>
+
+
+                        <div class="guide-step">
+
+                            <span class="guide-number">
+                                2
+                            </span>
+
+                            <span>
+                                Скачайте Лист отгрузки после формирования отгрузки.
+                            </span>
+
+                        </div>
+
+
+                        <div class="guide-step">
+
+                            <span class="guide-number">
+                                3
+                            </span>
+
+                            <span>
+                                Загрузите скачанный Лист отгрузки в поле «Лист отгрузки».
+                            </span>
+
+                        </div>
+
+
+                        <div class="guide-step">
+
+                            <span class="guide-number">
+                                4
+                            </span>
+
+                            <span>
+                                Вставьте номера заказов из 1С из столбика «Телефон 1»
+                                в поле «Номера заказов из 1С».
+                            </span>
+
+                        </div>
+
+
+                        <div class="guide-step">
+
+                            <span class="guide-number">
+                                5
+                            </span>
+
+                            <span>
+                                Нажмите «Начать сверку».
+                            </span>
+
+                        </div>
+
+
+                        <div class="guide-step">
+
+                            <span class="guide-number">
+                                6
+                            </span>
+
+                            <span>
+                                Дождитесь окончания обработки и ознакомьтесь с результатами ниже.
+                            </span>
+
+                        </div>
+
+
                     </div>
+
                 </div>
+
             </div>
 
-            <div class="panel">
+
+
+            <!-- 2. PDF -->
+            <div class="panel upload-panel">
+
                 <div class="panel-header">
-                    <h3>📄 Лист отгрузки (PDF)</h3>
+
+                    <h3>
+                        📄 Лист отгрузки (PDF)
+                    </h3>
+
                 </div>
+
+
                 <div class="panel-body">
-                    <div class="upload-area" id="pdfUploadArea">
-                        <input type="file" id="pdfFileInput" accept=".pdf" style="display:none">
-                        <button class="upload-btn">📎 Выбрать PDF</button>
-                        <p class="hint">или перетащите файл сюда</p>
-                        <p class="file-name" id="pdfFileName"></p>
-                        <p class="status" id="pdfStatus"></p>
+
+
+                    <div
+                        class="upload-area"
+                        id="pdfUploadArea"
+                    >
+
+
+                        <p class="area-desc">
+
+                            Загрузите
+                            <strong>Лист отгрузки</strong>
+                            из ЛК Ozon
+
+                            <br>
+
+                            номера отправления возьмём из PDF автоматически
+
+                        </p>
+
+
+                        <input
+                            type="file"
+                            id="pdfFileInput"
+                            accept=".pdf"
+                            style="display:none"
+                        >
+
+
+                        <button
+                            class="upload-btn"
+                            onclick="document.getElementById('pdfFileInput').click()"
+                        >
+
+                            📎 Выбрать PDF
+
+                        </button>
+
+
+                        <p class="hint">
+                            или перетащите файл сюда
+                        </p>
+
+
+                        <p
+                            id="pdfFileName"
+                            class="file-name"
+                        ></p>
+
+
                     </div>
+
+
+                    <div
+                        id="pdfStatus"
+                        class="status"
+                    ></div>
+
+
                 </div>
+
             </div>
 
-            <div class="panel">
+
+
+            <!-- 3. Номера 1С -->
+            <div class="panel reestr-panel">
+
+
                 <div class="panel-header">
-                    <h3>📋 Номера заказов из 1С</h3>
+
+                    <h3>
+                        📋 Номера заказов из 1С
+                    </h3>
+
                 </div>
+
+
                 <div class="panel-body">
-                    <p class="hint">Столбик «Телефон 1»</p>
-                    <textarea id="reestrText" placeholder="Вставьте номера заказов..."></textarea>
-                    <p class="status" id="reestrCounter">0 номеров</p>
+
+
+                    <div class="reestr-label">
+                        Столбик «Телефон 1»
+                    </div>
+
+
+                    <textarea
+                        id="reestrText"
+                        placeholder="Вставьте номера заказов..."
+                    ></textarea>
+
+
+                    <div class="reestr-footer">
+
+                        <span>
+                            <span id="reestrCount">0</span>
+                            номеров
+                        </span>
+
+                    </div>
+
+
+                    <div class="reestr-file-row">
+
+
+                        <input
+                            type="file"
+                            id="reestrFileInput"
+                            accept=".xlsx,.xls,.csv"
+                            style="display:none"
+                        >
+
+
+                        <button
+                            class="upload-btn"
+                            onclick="document.getElementById('reestrFileInput').click()"
+                        >
+
+                            📥 Загрузить Excel
+
+                        </button>
+
+
+                        <span class="hint">
+
+                            столбик «Идентификатор МП» или «Телефон1» найдётся автоматически
+
+                        </span>
+
+
+                    </div>
+
+
+                    <div
+                        id="reestrFileStatus"
+                        class="status"
+                    ></div>
+
+
+                    <div
+                        id="reestrDupWarning"
+                        class="dup-warning hidden"
+                    ></div>
+
+
                 </div>
+
             </div>
+
+
         </div>
 
-        <button class="start-btn" id="startBtn" onclick="startSverka()">▶️ НАЧАТЬ СВЕРКУ</button>
 
-        <div class="progress-section hidden" id="progressSection">
+
+        <!-- Кнопка запуска -->
+        <button
+            class="start-btn"
+            onclick="startSverka()"
+            id="startBtn"
+        >
+
+            ▶ НАЧАТЬ СВЕРКУ
+
+        </button>
+
+
+
+        <!-- Прогресс -->
+        <div
+            id="progressSection"
+            class="progress-section hidden"
+        >
+
+
             <div class="progress-stats">
-                <span id="progressPercent">0%</span>
-                <span>Обработка...</span>
+
+                <span id="progressText">
+                    Обработка...
+                </span>
+
+                <span id="progressPercent">
+                    0%
+                </span>
+
             </div>
+
+
             <div class="progress-bar">
-                <div class="progress-fill" id="progressFill"></div>
+
+                <div
+                    class="progress-fill"
+                    id="progressFill"
+                ></div>
+
             </div>
-            <div class="progress-details" id="progressDetails"></div>
+
+
+            <div
+                class="progress-details"
+                id="progressDetails"
+            ></div>
+
+
         </div>
 
-        <div class="results-section hidden" id="resultsSection">
-            <h3> Расхождения</h3>
-            <div class="summary" id="summary"></div>
+
+
+        <!-- Результаты -->
+        <div
+            id="resultsSection"
+            class="results-section hidden"
+        >
+
+
+            <h3>
+                Расхождения
+            </h3>
+
+
+            <p
+                style="
+                    font-size: 12px;
+                    color: #777;
+                    margin-bottom: 15px;
+                "
+            >
+
+                Нажмите на номер заказа, чтобы скопировать его.
+                После копирования строка подсветится.
+
+            </p>
+
+
+            <div
+                class="summary"
+                id="summary"
+            ></div>
+
+
             <div class="table-wrapper">
+
+
                 <table>
+
+
                     <thead>
+
                         <tr>
-                            <th>Номер заказа</th>
-                            <th>В Листе отгрузки</th>
-                            <th>В 1С</th>
-                            <th>Статус</th>
+
+                            <th>
+                                Номер отправления
+                            </th>
+
+                            <th>
+                                В листе
+                            </th>
+
+                            <th>
+                                В 1С
+                            </th>
+
+                            <th>
+                                Статус
+                            </th>
+
                         </tr>
+
                     </thead>
+
+
                     <tbody id="resultsBody"></tbody>
+
+
                 </table>
+
+
             </div>
-            <div class="export-actions">
-                <button class="export-btn" onclick="copyAllNumbers()"> Скопировать все</button>
-                <button class="export-btn" onclick="exportCSV()">📄 Скачать CSV</button>
-            </div>
+
+
+            <button
+                class="export-btn"
+                onclick="exportCSV()"
+            >
+
+                📥 Скачать CSV
+
+            </button>
+
+
         </div>
+
+
     </div>
 
+
+
+    <!-- Основной скрипт -->
     <script src="script.js"></script>
+
+
+    <!-- Поддержка Excel реестра -->
+    <script src="../../../assets/reestr-file.js?v=2"></script>
+
+    <script>
+
+        ReestrFileSupport.setup({
+
+            textareaId: 'reestrText',
+
+            inputId: 'reestrFileInput',
+
+            statusId: 'reestrFileStatus',
+
+            dupId: 'reestrDupWarning',
+
+            splitRe: /\n/
+
+        });
+
+    </script>
+
+
+    <!-- Общие скрипты сайта -->
+    <script src="../../../assets/audio.js?v=4"></script>
+
+    <script src="../../../assets/themes.js"></script>
+
+    <script src="../../../assets/theme.js"></script>
+
+
 </body>
 </html>

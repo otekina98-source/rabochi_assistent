@@ -1,324 +1,536 @@
-* { margin: 0; padding: 0; box-sizing: border-box; }
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
     background: #FAF8FF;
     color: #1d1d1f;
     min-height: 100vh;
 }
 
+
 .container {
     max-width: 1400px;
     margin: 0 auto;
-    padding: 30px 20px;
+    padding: 28px 28px 35px;
 }
+
+
+/* НАЗАД */
 
 .back-btn {
-    background: #E6E6FA;
+    background: #E7E7FA;
+    color: #17171B;
     border: none;
-    padding: 10px 20px;
-    border-radius: 10px;
+    padding: 10px 21px;
+    border-radius: 11px;
     cursor: pointer;
-    font-size: 1em;
-    margin-bottom: 20px;
-    color: #1d1d1f;
+    font-size: 15px;
+    margin-bottom: 25px;
+    transition: 0.2s ease;
 }
 
-.back-btn:hover { background: #D8BFD8; }
+
+.back-btn:hover {
+    background: #DCDCF4;
+}
+
+
+/* ЗАГОЛОВОК */
+
+.sverka-header {
+    margin-bottom: 31px;
+}
+
 
 .sverka-header h2 {
-    font-size: 2em;
-    margin-bottom: 5px;
+    font-size: 32px;
+    line-height: 1.2;
+    font-weight: 750;
+    color: #17171B;
+    margin-bottom: 8px;
 }
 
+
 .subtitle {
-    color: #86868b;
-    margin-bottom: 30px;
-    font-size: 0.95em;
+    color: #85858E;
+    font-size: 15px;
 }
+
+
+/* ОСНОВНАЯ СЕТКА */
 
 .sverka-layout {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 20px;
+    align-items: stretch;
     margin-bottom: 25px;
 }
 
+
+/* ПАНЕЛИ */
+
 .panel {
-    background: white;
+    background: #FFFFFF;
+    border: 2px solid #E2E0F3;
     border-radius: 16px;
-    border: 2px solid #E6E6FA;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
-    min-height: 340px;
+    min-height: 435px;
 }
+
+
+.reestr-panel {
+    border-left: 4px solid #0865FF;
+}
+
+
+.postings-panel {
+    border-left: 4px solid #E73C55;
+}
+
 
 .panel-header {
-    padding: 18px 20px;
-    border-bottom: 2px solid #E6E6FA;
-    background: #FAF8FF;
-    border-radius: 14px 14px 0 0;
+    min-height: 63px;
+    display: flex;
+    align-items: center;
+    padding: 0 25px;
+    background: #FAF9FF;
+    border-bottom: 2px solid #E5E3F3;
 }
+
 
 .panel-header h3 {
-    font-size: 1.15em;
-    color: #1d1d1f;
+    font-size: 18px;
+    font-weight: 700;
+    color: #17171B;
 }
 
+
 .panel-body {
-    padding: 20px;
+    padding: 21px 22px 24px;
     flex: 1;
     display: flex;
     flex-direction: column;
 }
 
-.reestr-panel { border-left: 4px solid #005BFF; }
-.postings-panel { border-left: 4px solid #dc3545; }
+
+/* ОБЛАСТЬ ЗАГРУЗКИ */
 
 .upload-area {
-    border: 2px dashed #A8C8FF;
-    border-radius: 12px;
-    padding: 30px 15px;
-    text-align: center;
-    background: #FAF8FF;
-    transition: all 0.3s;
     flex: 1;
+    min-height: 300px;
+    border: 2px dashed #9DBEFF;
+    border-radius: 13px;
+    background: #FBFAFF;
+    padding: 30px 22px;
+
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
+
+    text-align: center;
+
+    transition: 0.2s ease;
 }
+
 
 .upload-area.dragover {
-    border-color: #005BFF;
-    background: #F0F6FF;
+    border-color: #0865FF;
+    background: #F0F5FF;
 }
+
 
 .area-desc {
-    color: #1d1d1f;
-    font-size: 0.95em;
-    line-height: 1.5;
-    margin-bottom: 18px;
+    font-size: 15px;
+    line-height: 1.55;
+    color: #242429;
+    margin-bottom: 24px;
 }
+
 
 .upload-btn {
-    background: #A8C8FF;
-    color: #1d1d1f;
+    background: #AFCFFF;
+    color: #17171B;
     border: none;
-    padding: 12px 24px;
+    padding: 11px 24px;
     border-radius: 10px;
     cursor: pointer;
-    font-size: 1em;
+    font-size: 14px;
     font-weight: 500;
+    transition: 0.2s ease;
 }
 
-.upload-btn:hover { background: #8AB4FF; }
+
+.upload-btn:hover {
+    background: #96BFFF;
+}
+
 
 .hint {
-    color: #86868b;
-    font-size: 0.85em;
-    margin-top: 10px;
+    color: #92929B;
+    font-size: 12px;
+    line-height: 1.45;
+    margin-top: 12px;
 }
 
+
 .file-name {
-    color: #1d1d1f;
-    font-weight: 500;
-    margin-top: 10px;
-    font-size: 0.9em;
+    color: #28282D;
+    font-weight: 600;
+    margin-top: 11px;
+    font-size: 13px;
+    word-break: break-word;
 }
+
+
+/* ИНСТРУКЦИЯ OZON */
+
+.ozon-instruction {
+    background: #FAF9FF;
+    border: 1px solid #E5E3F3;
+    border-radius: 11px;
+    padding: 15px 18px;
+    margin-bottom: 14px;
+
+    font-size: 13px;
+    line-height: 1.5;
+    color: #29292E;
+}
+
+
+.instruction-title {
+    font-size: 14px;
+    font-weight: 750;
+    margin-bottom: 7px;
+}
+
+
+.ozon-instruction p {
+    margin-bottom: 5px;
+}
+
+
+.ozon-instruction p:last-child {
+    margin-bottom: 0;
+}
+
+
+.postings-upload {
+    min-height: 210px;
+}
+
+
+/* СТАТУС */
 
 .status {
     margin-top: 10px;
-    font-size: 0.85em;
-    color: #86868b;
+    font-size: 13px;
+    color: #85858D;
     white-space: pre-line;
 }
 
-.status.success { color: #28a745; }
-.status.error { color: #dc3545; }
 
-/* Поля для вставки списков заказов */
-
-.text-upload-area {
-    gap: 12px;
-    padding: 20px;
-    justify-content: flex-start;
-    align-items: stretch;
+.status.success {
+    color: #278E43;
 }
 
-.text-upload-area .area-desc {
-    margin-bottom: 0;
-    text-align: left;
+
+.status.error {
+    color: #D53242;
 }
 
-.orders-text {
-    display: block;
-    width: 100%;
-    min-height: 190px;
-    flex: 1;
-    resize: vertical;
-    padding: 12px;
-    border: 1px solid #A8C8FF;
-    border-radius: 10px;
-    background: #fff;
-    color: #1d1d1f;
-    font-family: 'Courier New', monospace;
-    font-size: 0.9em;
-    line-height: 1.5;
-    outline: none;
-}
 
-.orders-text:focus {
-    border-color: #005BFF;
-    box-shadow: 0 0 0 2px rgba(0, 91, 255, 0.12);
-}
-
-.orders-text::placeholder {
-    color: #999;
-}
-
-.text-upload-area .upload-btn {
-    align-self: flex-start;
-}
-
-.text-upload-area .hint {
-    text-align: left;
-    margin-top: 0;
-}
+/* КНОПКА СРАВНИТЬ */
 
 .start-btn {
     width: 100%;
-    background: linear-gradient(135deg, #005BFF, #0046CC);
-    color: white;
+    background: linear-gradient(90deg, #1466F4, #074CC7);
+    color: #FFFFFF;
     border: none;
-    padding: 18px;
-    border-radius: 14px;
-    font-size: 1.2em;
-    font-weight: 600;
+
+    padding: 17px 20px;
+
+    border-radius: 13px;
+
+    font-size: 20px;
+    font-weight: 750;
+
     cursor: pointer;
+
     margin-bottom: 25px;
-    letter-spacing: 0.5px;
+
+    transition: 0.2s ease;
 }
 
+
 .start-btn:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0, 91, 255, 0.4);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(0, 78, 201, 0.25);
 }
+
 
 .start-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
 }
 
-.progress-section { margin-bottom: 25px; }
+
+/* ПРОГРЕСС */
+
+.progress-section {
+    margin-bottom: 25px;
+    padding: 16px 18px;
+
+    background: #FFFFFF;
+
+    border: 1px solid #E2E1ED;
+    border-radius: 12px;
+}
+
 
 .progress-stats {
     display: flex;
     justify-content: space-between;
+
     margin-bottom: 8px;
+
+    font-size: 13px;
 }
+
 
 .progress-bar {
     width: 100%;
-    height: 12px;
-    background: #E6E6FA;
-    border-radius: 6px;
+    height: 11px;
+
+    background: #E7E7F2;
+
+    border-radius: 10px;
+
     overflow: hidden;
 }
 
+
 .progress-fill {
     height: 100%;
-    background: linear-gradient(90deg, #005BFF, #0046CC);
-    width: 0%;
+    width: 0;
+
+    background: linear-gradient(90deg, #1466F4, #074CC7);
+
     transition: width 0.3s;
 }
 
+
 .progress-details {
     margin-top: 8px;
-    font-size: 0.85em;
-    color: #86868b;
+
+    font-size: 12px;
+
+    color: #85858D;
 }
 
-.results-section h3 {
-    font-size: 1.5em;
-    margin-bottom: 20px;
+
+/* РЕЗУЛЬТАТ */
+
+.results-section {
+    background: #FFFFFF;
+
+    border: 1px solid #E0DFEC;
+
+    border-radius: 14px;
+
+    padding: 20px;
 }
+
+
+.results-section h3 {
+    font-size: 20px;
+    margin-bottom: 7px;
+}
+
+
+.copy-hint {
+    font-size: 12px;
+    color: #85858D;
+    margin-bottom: 18px;
+}
+
+
+/* КАРТОЧКИ */
 
 .summary {
     display: grid;
+
     grid-template-columns: repeat(3, 1fr);
-    gap: 15px;
-    margin-bottom: 25px;
+
+    gap: 14px;
+
+    margin-bottom: 22px;
 }
 
+
 .summary-card {
-    background: white;
-    border: 2px solid #E6E6FA;
-    border-radius: 12px;
-    padding: 18px;
+    background: #FAF9FF;
+
+    border: 1px solid #E1DFEF;
+
+    border-radius: 11px;
+
+    padding: 16px;
+
     text-align: center;
 }
 
+
 .summary-card .num {
-    font-size: 2em;
-    font-weight: 700;
     display: block;
-    color: #1d1d1f;
+
+    font-size: 29px;
+
+    font-weight: 750;
+
+    color: #202025;
 }
 
+
 .summary-card .lbl {
-    font-size: 0.85em;
-    color: #86868b;
+    font-size: 12px;
+
+    color: #85858D;
+
     margin-top: 5px;
 }
 
+
 .summary-card.miss {
-    border-color: #dc3545;
-    background: #fff5f5;
+    border-color: #F0C4CA;
+    background: #FFF7F8;
 }
 
+
 .summary-card.ok {
-    border-color: #E6E6FA;
-    background: #FAF8FF;
+    background: #FAF9FF;
 }
+
+
+/* ТАБЛИЦА */
 
 .table-wrapper {
     max-height: 500px;
+
     overflow-y: auto;
-    border: 2px solid #E6E6FA;
-    border-radius: 12px;
-    margin-bottom: 20px;
+
+    border: 1px solid #DDDCE9;
+
+    border-radius: 11px;
+
+    margin-bottom: 18px;
 }
+
 
 table {
     width: 100%;
     border-collapse: collapse;
 }
 
+
 th {
-    background: #E6E6FA;
-    padding: 14px;
+    background: #ECEBF7;
+
+    padding: 13px 15px;
+
     text-align: left;
+
     position: sticky;
+
     top: 0;
-    color: #1d1d1f;
+
+    z-index: 2;
+
+    color: #202025;
+
+    font-size: 13px;
 }
+
 
 td {
-    padding: 12px 14px;
-    border-bottom: 1px solid #F0E6FF;
-    font-family: 'Courier New', monospace;
-    color: #1d1d1f;
+    padding: 12px 15px;
+
+    border-bottom: 1px solid #EEEEF4;
+
+    font-family: "Courier New", monospace;
+
+    color: #29292E;
+
+    font-size: 13px;
+
+    background: #FFFFFF;
 }
 
-tbody tr:hover { background: #FAF8FF; }
+
+tbody tr:hover td {
+    background: #FAFAFE;
+}
+
 
 .col-num {
     width: 70px;
     text-align: center;
 }
 
-td.col-num { text-align: center; }
+
+td.col-num {
+    text-align: center;
+}
+
+
+/* КЛИКАБЕЛЬНЫЙ НОМЕР */
+
+.order-copy {
+    cursor: pointer;
+
+    font-weight: 700;
+
+    color: #25252A;
+
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 4px;
+
+    transition: 0.15s ease;
+}
+
+
+.order-copy:hover {
+    color: #0865FF;
+}
+
+
+/* СКОПИРОВАННАЯ СТРОКА */
+
+tbody tr.copied-row td {
+    background: #E7F8EB !important;
+}
+
+
+tbody tr.copied-row:hover td {
+    background: #DCF4E2 !important;
+}
+
+
+tbody tr.copied-row .order-copy {
+    color: #267D3D;
+}
+
+
+/* КНОПКИ РЕЗУЛЬТАТА */
 
 .result-actions {
     display: flex;
@@ -326,66 +538,80 @@ td.col-num { text-align: center; }
     flex-wrap: wrap;
 }
 
+
 .export-btn {
-    background: #E6E6FA;
+    background: #E9E8F8;
+
     color: #1d1d1f;
+
     border: none;
-    padding: 12px 24px;
-    border-radius: 10px;
+
+    padding: 11px 21px;
+
+    border-radius: 9px;
+
     cursor: pointer;
-    font-size: 1em;
+
+    font-size: 13px;
+
+    font-weight: 600;
+
+    transition: 0.2s ease;
 }
 
-.export-btn:hover { background: #D8BFD8; }
 
-.hidden { display: none !important; }
-
-/* Копирование отдельных номеров заказов */
-
-.copy-number {
-    display: inline-block;
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: 6px;
-    padding: 7px 10px;
-    font-family: 'Courier New', monospace;
-    font-size: 1em;
-    color: #1d1d1f;
-    text-align: left;
-    cursor: pointer;
-    transition: background 0.2s, color 0.2s;
+.export-btn:hover {
+    background: #DCD9F3;
 }
 
-.copy-number:hover {
-    background: #F0F6FF;
-    border-color: #A8C8FF;
+
+/* СКРЫТО */
+
+.hidden {
+    display: none !important;
 }
 
-.copy-number.copied {
-    background: #DCEBFF;
-    border-color: #005BFF;
-    color: #005BFF;
-    font-weight: 700;
-}
 
-.copy-number:focus-visible {
-    outline: 2px solid #005BFF;
-    outline-offset: 2px;
-}
+/* АДАПТИВ */
 
-@media (max-width: 800px) {
-    .sverka-layout { grid-template-columns: 1fr; }
-    .panel { min-height: auto; }
-}
+@media (max-width: 900px) {
 
-@media (max-width: 600px) {
-    .summary { grid-template-columns: 1fr; }
-
-    .text-upload-area {
-        padding: 15px;
+    .sverka-layout {
+        grid-template-columns: 1fr;
     }
 
-    .orders-text {
-        min-height: 160px;
+
+    .panel {
+        min-height: auto;
     }
+
+
+    .upload-area {
+        min-height: 280px;
+    }
+
+}
+
+
+@media (max-width: 650px) {
+
+    .container {
+        padding: 18px 14px 28px;
+    }
+
+
+    .sverka-header h2 {
+        font-size: 24px;
+    }
+
+
+    .summary {
+        grid-template-columns: 1fr;
+    }
+
+
+    .start-btn {
+        font-size: 16px;
+    }
+
 }
