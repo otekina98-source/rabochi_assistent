@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Лист подбора и наклейки — ОЗОН</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="../../../assets/site.css?v=2">
+    <link rel="stylesheet" href="../../../assets/themes.css">
+    <script>try{document.documentElement.setAttribute("data-theme",localStorage.getItem("ra-theme")||"light")}catch(e){}</script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <button class="back-btn" onclick="window.location.href='../../../index.html'">← В меню</button>
+
+        <div class="sverka-header">
+            <h2><svg class="title-icon" viewBox="0 0 48 48" width="36" height="36" aria-hidden="true"><defs><linearGradient id="ozSortGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3b82f6"/><stop offset="1" stop-color="#0046CC"/></linearGradient></defs><rect x="3" y="3" width="42" height="42" rx="11" fill="url(#ozSortGrad)"/><text x="16" y="21.5" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" font-weight="800" fill="#fff">А</text><text x="16" y="39" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" font-weight="800" fill="#fff">Я</text><path d="M33 12v22m0 0l-6-6m6 6l6-6" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>Лист подбора и наклейки</h2>
+            <p class="subtitle">сортировка по алфавиту • один порядок для обоих файлов • ОЗОН</p>
+        </div>
+
+        <div class="pack-layout">
+
+            <!-- Плашка: Прайс -->
+            <div class="panel upload-panel">
+                <div class="panel-header">
+                    <h3>📊 Прайс (Excel файл)</h3>
+                </div>
+                <div class="panel-body">
+                    <div class="upload-area" id="priceUploadArea">
+                        <p class="area-desc">Загрузите <strong>прайс</strong> —<br>из него возьмём наименования по артикулам</p>
+                        <input type="file" id="priceFileInput" accept=".xlsx,.xls" style="display:none">
+                        <button class="upload-btn" onclick="document.getElementById('priceFileInput').click()">⬆️ Выбрать Excel</button>
+                        <p class="hint">или перетащите файл сюда</p>
+                        <p id="priceFileName" class="file-name"></p>
+                    </div>
+                    <div id="priceStatus" class="status">Столбцы: артикул + наименование</div>
+                </div>
+            </div>
+
+            <!-- Плашка: Лист подбора -->
+            <div class="panel upload-panel">
+                <div class="panel-header">
+                    <h3>📄 Лист подбора (PDF)</h3>
+                </div>
+                <div class="panel-body">
+                    <div class="upload-area" id="lpUploadArea">
+                        <p class="area-desc">Загрузите <strong>Лист подбора</strong> из ЛК Ozon (PDF) —<br>номера отправления возьмём автоматически</p>
+                        <input type="file" id="lpFileInput" accept=".pdf" style="display:none">
+                        <button class="upload-btn" onclick="document.getElementById('lpFileInput').click()">⬆️ Выбрать PDF</button>
+                        <p class="hint">или перетащите файл сюда</p>
+                        <p id="lpFileName" class="file-name"></p>
+                    </div>
+                    <div id="lpStatus" class="status"></div>
+                </div>
+            </div>
+
+            <!-- Плашка: Наклейки -->
+            <div class="panel upload-panel">
+                <div class="panel-header">
+                    <h3>🏷️ Наклейки (PDF)</h3>
+                </div>
+                <div class="panel-body">
+                    <div class="upload-area" id="ticketUploadArea">
+                        <p class="area-desc">Загрузите <strong>файл с наклейками</strong> (PDF) —<br>они встанут в том же порядке, что и лист</p>
+                        <input type="file" id="ticketFileInput" accept=".pdf" style="display:none">
+                        <button class="upload-btn" onclick="document.getElementById('ticketFileInput').click()">⬆️ Выбрать PDF</button>
+                        <p class="hint">или перетащите файл сюда</p>
+                        <p id="ticketFileName" class="file-name"></p>
+                    </div>
+                    <div id="ticketStatus" class="status"></div>
+                </div>
+            </div>
+        </div>
+
+        <button class="start-btn" onclick="startPack()" id="startBtn" disabled>📦 СОБРАТЬ ФАЙЛЫ</button>
+
+        <div id="progressSection" class="progress-section hidden">
+            <div class="progress-stats">
+                <span id="progressText">Обработка...</span>
+                <span id="progressPercent">0%</span>
+            </div>
+            <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+            <div class="progress-details" id="progressDetails"></div>
+        </div>
+
+        <div id="warningsSection" class="warnings-section hidden">
+            <div class="warning-box" id="warningsBox"></div>
+        </div>
+
+        <div id="resultsSection" class="results-section hidden">
+            <h3>📊 Результат</h3>
+            <div class="summary" id="summary"></div>
+            <div class="download-row">
+                <button class="export-btn primary" id="downloadXlsxBtn">📥 Скачать Лист подбора (Excel)</button>
+                <button class="export-btn primary" id="downloadPdfBtn">📥 Скачать Наклейки (PDF)</button>
+            </div>
+            <h4 class="preview-title">Предпросмотр листа (порядок = порядок наклеек)</h4>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr><th>№</th><th>Номер отправления</th><th>Артикул</th><th>Товар</th><th>Наименование</th></tr>
+                    </thead>
+                    <tbody id="resultsBody"></tbody>
+                </table>
+            </div>
+            <button class="export-btn hidden" id="showAllBtn" onclick="showAllRows()">Показать все строки</button>
+
+            <!-- Соответствие этикеток листу подбора (в самом низу) -->
+            <div id="labelsDiff" class="labels-diff hidden"></div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+
+    <script src="../../../assets/audio.js?v=4"></script>
+    <script src="../../../assets/themes.js"></script>
+    <script src="../../../assets/theme.js"></script>
+</body>
+</html>

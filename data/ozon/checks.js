@@ -10,7 +10,11 @@ const ozonChecks = [
         title: 'Сверка реестра 1С и отменённых заказов',
         path: 'data/ozon/otmenennye-zakazy/index.html'
     },
-
+{
+        id: 'podbor-stickers',
+        title: 'Сортировка ЛП и ШК по порядку',
+        path: 'data/ozon/podbor-stickers/index.html'
+    },
    
 ];
 
