@@ -301,6 +301,12 @@ async function handleLp(file) {
 /* ============================ Наклейки (PDF) ============================ */
 
 function stickerNumberFromPage(tc) {
+    // При наличии нового ШК используем именно полный ii-номер, даже если
+    // на той же странице PDF встречается обычный номер отправления.
+    const ids = labelIdsFromWords(itemsToWords(tc.items));
+    if (ids.length === 1) return ids[0];
+    if (ids.length > 1) return null; // неоднозначное соответствие
+
     // 1) точное совпадение элемента текста с номером отправления
     for (const it of tc.items) {
         const t = (it.str || '').trim();
@@ -316,10 +322,7 @@ function stickerNumberFromPage(tc) {
     const joined = tc.items.map(i => (i.str || '').trim()).join('').replace(/\s+/g, '');
     const m = /(\d{5,10}-\d{3,5}-\d{1,3})\d{4}/.exec(joined);
     if (m) return m[1];
-    // 4) новый формат: полный ii-идентификатор на наклейке.
-    // Не используем совпадения по хвосту из четырёх цифр.
-    const ids = labelIdsFromWords(itemsToWords(tc.items));
-    return ids.length === 1 ? ids[0] : null;
+    return null;
 }
 
 async function handleTicket(file) {
@@ -521,10 +524,12 @@ async function startPack() {
             labelOwners.get(r.labelId).add(r.num);
         }
         for (const r of rows) {
-            // Старый формат по-прежнему сопоставляется по номеру отправления.
-            // Для нового ищем строго полный ID, связанный с этой строкой.
-            const candidates = [r.num];
-            if (r.labelId && labelOwners.get(r.labelId)?.size === 1) candidates.push(r.labelId);
+            // Если в листе есть ii-номер, ищем наклейку ТОЛЬКО по нему.
+            // Без ii-номера оставляем прежнее сопоставление по отправлению.
+            // Неоднозначный ii-номер никому не присваиваем.
+            const candidates = r.labelId
+                ? (labelOwners.get(r.labelId)?.size === 1 ? [r.labelId] : [])
+                : [r.num];
             let pg = null;
             for (const key of candidates) {
                 const queue = pageOf.get(key) || [];
