@@ -306,52 +306,62 @@ async function handleLp(file) {
 /* ============================ Наклейки (PDF) ============================ */
 
 function stickerNumberFromPage(tc) {
-    // При наличии нового ШК используем именно полный ii-номер, даже если
-    // на той же странице PDF встречается обычный номер отправления.
+    // В новых этикетках ii-префикс и четыре последние цифры могут быть
+    // разными текстовыми элементами/шрифтами одной строки.
     const ids = labelIdsFromWords(itemsToWords(tc.items));
+    if (ids.length > 1) return null; // неоднозначный ШК
     if (ids.length === 1) return ids[0];
-    if (ids.length > 1) return null; // неоднозначное соответствие
 
-    // 1) точное совпадение элемента текста с номером отправления
-    for (const it of tc.items) {
-        const t = (it.str || '').trim();
-        if (NUM_RE.test(t)) return t;
+    // Дополнительное чтение ii по текстовым элементам PDF, когда координаты
+    // шрифтов немного различаются. Принимаем только ПОЛНЫЙ идентификатор.
+    const chunks = tc.items.map(it => String(it.str || '').trim()).filter(Boolean);
+    const joined = chunks.join(' ');
+    const newIds = [...new Set([...joined.matchAll(/(?:^|[^\w])(ii\s*(?:\d\s*){8,16})(?=$|[^\w])/gi)]
+        .map(m => normalizedLabelPart(m[1])).filter(v => LABEL_ID_RE.test(v)))];
+    if (newIds.length > 1) return null;
+    if (newIds.length === 1) return newIds[0];
+
+    // Старые Ozon: «4414 0656» и «-0784-1» могут находиться в нескольких
+    // pdf.js items. Разрешаем пробелы ВНУТРИ цифровой части, но не меняем
+    // ни одной цифры и не используем последние четыре цифры как ключ.
+    const oldIds = new Set();
+    for (const m of joined.matchAll(/(?:^|[^0-9])((?:\d{8,10}|\d{4,7}[\s\u00a0\u202f]+\d{1,6})[\s\u00a0\u202f]*-\s*\d{3,5}-\s*\d{1,3})(?!\d)/g)) {
+        const candidate = m[1].replace(/[\s\u00a0\u202f]+/g, '');
+        if (NUM_RE.test(candidate)) oldIds.add(candidate);
     }
-    // 2) номер, склеенный с 4-значным кодом этикетки
-    for (const it of tc.items) {
-        const t = (it.str || '').trim();
-        const m = STICKER_GLUE_RE.exec(t);
-        if (m) return m[1];
+    // В старом варианте номер иногда хранится слитно с четырёхзначным кодом.
+    for (const value of chunks) {
+        const m = STICKER_GLUE_RE.exec(value.replace(/\s+/g, ''));
+        if (m) oldIds.add(m[1]);
     }
-    // 3) Старые Ozon: номер на самой наклейке напечатан в ДВЕ строки.
-    // Пример из реального PDF: «4414 0656» + «-0784-1».
-    // Не смешиваем адрес с номером: начинаем с длинного цифрового фрагмента,
-    // затем берём только непосредственно следующий числовой хвост с дефисами.
-    const parts = tc.items.map(it => (it.str || '').trim()).filter(Boolean);
-    for (let i = 0; i < parts.length; i++) {
-        const first = parts[i].replace(/\s+/g, '');
-        const direct = /(?:^|\D)(\d{5,10}-\d{3,5}-\d{1,3})(?!\d)/.exec(first);
-        if (direct) return direct[1];
-        if (!/^\d{5,10}$/.test(first)) continue;
-        for (let j = i + 1; j < Math.min(parts.length, i + 4); j++) {
-            const suffix = parts[j].replace(/\s+/g, '');
-            if (/^-\d{3,5}-\d{1,3}$/.test(suffix)) return first + suffix;
-            if (/[А-Яа-яA-Za-z]/.test(suffix)) break;
-        }
+    return oldIds.size === 1 ? [...oldIds][0] : null;
+}
+
+// Соответствие строится строго в порядке УЖЕ отсортированного листа.
+// Каждая страница наклейки может использоваться только один раз.
+function matchStickerPages(rows, pageOf, pageCount) {
+    const pageIndices = [], missingStickers = [], usedPages = new Set();
+    const labelOwners = new Map();
+    for (const r of rows) {
+        if (!r.labelId) continue;
+        if (!labelOwners.has(r.labelId)) labelOwners.set(r.labelId, new Set());
+        labelOwners.get(r.labelId).add(r.num);
     }
-    // 4) На случай, если pdf.js разделил даже цифровую часть на
-    // несколько элементов: собираем только числовые фрагменты подряд.
-    let numericRun = '';
-    for (const raw of parts) {
-        const part = raw.replace(/\s+/g, '');
-        if (/^[\d-]+$/.test(part)) {
-            numericRun += part;
-            const matches = numericRun.match(/(?:^|\D)(\d{5,10}-\d{3,5}-\d{1,3})(?!\d)/);
-            if (matches) return matches[1];
-            if (numericRun.length > 40) numericRun = part;
-        } else numericRun = '';
+    for (const r of rows) {
+        const key = r.labelId || r.num;
+        const unique = !r.labelId || labelOwners.get(r.labelId).size === 1;
+        const available = unique ? (pageOf.get(key) || []) : [];
+        const pg = available.find(p => Number.isInteger(p) && p >= 1 && p <= pageCount && !usedPages.has(p)) || null;
+        pageIndices.push(pg);
+        if (pg === null) missingStickers.push(r.num);
+        else usedPages.add(pg);
     }
-    return null;
+    const extraStickers = [];
+    for (let p = 1; p <= pageCount; p++) if (!usedPages.has(p)) extraStickers.push(p);
+    if (pageIndices.filter(p => p !== null).length !== usedPages.size) {
+        throw new Error('Ошибка проверки: одна страница наклейки назначена повторно');
+    }
+    return { pageIndices, missingStickers, extraStickers };
 }
 
 async function handleTicket(file) {
@@ -542,44 +552,11 @@ async function startPack() {
         setProgress(60, 'Сопоставление наклеек с листом...', '');
         await new Promise(r => setTimeout(r, 30));
         const pageOf = state.ticket.pageOf;
-        const pageIndices = [];
-        const missingStickers = [];
-        const usedPages = new Set();
-        // Не разрешаем неоднозначный ID, встречающийся у разных заказов.
-        const labelOwners = new Map();
-        for (const r of rows) {
-            if (!r.labelId) continue;
-            if (!labelOwners.has(r.labelId)) labelOwners.set(r.labelId, new Set());
-            labelOwners.get(r.labelId).add(r.num);
-        }
-        for (const r of rows) {
-            // Если в листе есть ii-номер, ищем наклейку ТОЛЬКО по нему.
-            // Без ii-номера оставляем прежнее сопоставление по отправлению.
-            // Неоднозначный ii-номер никому не присваиваем.
-            const candidates = r.labelId
-                ? (labelOwners.get(r.labelId)?.size === 1 ? [r.labelId] : [])
-                : [r.num];
-            let pg = null;
-            for (const key of candidates) {
-                const queue = pageOf.get(key) || [];
-                pg = queue.find(page => !usedPages.has(page)) || null;
-                if (pg !== null) break;
-            }
-            if (pg !== null) {
-                pageIndices.push(pg);
-                usedPages.add(pg);
-            } else {
-                pageIndices.push(null);
-                missingStickers.push(r.num);
-            }
-        }
-        const extraStickers = [];
+        const { pageIndices, missingStickers, extraStickers } =
+            matchStickerPages(rows, pageOf, state.ticket.pages);
         const extraNums = [];
-        for (let p = 1; p <= state.ticket.pages; p++) {
-            if (!usedPages.has(p)) {
-                extraStickers.push(p);
-                extraNums.push(state.ticket.pageToNum.get(p) || ('стр. ' + p));
-            }
+        for (const p of extraStickers) {
+            extraNums.push(state.ticket.pageToNum.get(p) || ('стр. ' + p));
         }
 
         // 5. Пересборка PDF (в pdf-lib индексы страниц с нуля)
