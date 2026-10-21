@@ -138,29 +138,37 @@ function itemsToWords(items) {
     return words;
 }
 
-// Читаем новый ID целиком. PDF может разбивать мелкий шрифт на несколько
-// соседних текстовых элементов; объединяем только фрагменты одной строки.
+// Новый ID может быть напечатан единым текстом или частями:
+// "ii5008184" + "3082" (последние цифры в чёрной плашке).
+// Собираем только соседние части ОДНОЙ строки и проверяем полный номер.
+// Промежуточные совпадения (до добавления хвоста) не учитываем.
 function labelIdsFromWords(words) {
     const result = new Set();
     const lines = [];
     for (const w of words) {
-        let line = lines.find(l => Math.abs(l.y - w.y) <= 2.5);
+        let line = lines.find(l => Math.abs(l.y - w.y) <= Math.max(2.5, Math.min(5, (w.h || 0) * .5)));
         if (!line) { line = { y: w.y, words: [] }; lines.push(line); }
         line.words.push(w);
     }
     for (const line of lines) {
-        line.words.sort((a, b) => a.x - b.x);
-        for (let i = 0; i < line.words.length; i++) {
+        const sorted = line.words.sort((a, b) => a.x - b.x);
+        for (let i = 0; i < sorted.length; i++) {
+            // Старт строго с ii (допускаем разделение букв PDF-движком).
+            if (!/^i/i.test(sorted[i].text)) continue;
             let combined = '';
             let right = null;
-            for (let j = i; j < line.words.length && j < i + 12; j++) {
-                const w = line.words[j];
-                if (right !== null && w.x - right > 5) break;
-                combined += w.text;
+            for (let j = i; j < sorted.length && j < i + 20; j++) {
+                const w = sorted[j];
+                // Достаточно для разрыва перед выделенными четырьмя цифрами,
+                // но не для произвольного поиска цифр на всей этикетке.
+                if (right !== null && w.x - right > Math.max(22, (w.h || 0) * 2)) break;
+                if (!/^(?:i{1,2}\d*|\d+)$/i.test(w.text)) break;
+                const next = combined + w.text;
+                if (!/^i{1,2}\d{0,16}$/i.test(next)) break;
+                combined = next;
                 right = Math.max(right === null ? -Infinity : right, w.x + w.w);
-                if (LABEL_ID_RE.test(combined)) result.add(combined.toLowerCase());
-                if (combined.length > 18) break;
             }
+            if (LABEL_ID_RE.test(combined)) result.add(combined.toLowerCase());
         }
     }
     return [...result];
@@ -423,7 +431,7 @@ function buildXlsx(rows) {
     let sheet =
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
         '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-        `<dimension ref="A1:C${n + 1}"/>` +
+        `<dimension ref="A1:D${n + 1}"/>` +
         '<sheetViews><sheetView workbookViewId="0">' +
         '<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>' +
         '</sheetView></sheetViews>' +
@@ -432,13 +440,14 @@ function buildXlsx(rows) {
         '<col min="1" max="1" width="20" customWidth="1"/>' +
         '<col min="2" max="2" width="12" customWidth="1"/>' +
         '<col min="3" max="3" width="84" customWidth="1"/>' +
+        '<col min="4" max="4" width="22" customWidth="1"/>' +
         '</cols>' +
         '<sheetData>';
 
     const cell = (ref, value, style) =>
         `<c r="${ref}"${style ? ` s="${style}"` : ''} t="inlineStr"><is><t xml:space="preserve">${escapeXml(value)}</t></is></c>`;
 
-    sheet += `<row r="1">${cell('A1', 'Номер отправления', 1)}${cell('B1', 'Артикул', 1)}${cell('C1', 'Товар', 1)}</row>`;
+    sheet += `<row r="1">${cell('A1', 'Номер отправления', 1)}${cell('B1', 'Артикул', 1)}${cell('C1', 'Товар', 1)}${cell('D1', 'Номер ШК', 1)}</row>`;
 
     // Чередование серых полос по блокам одинаковых товаров (видно при ч/б печати)
     let band = false;
@@ -447,10 +456,10 @@ function buildXlsx(rows) {
         if (r.name !== prevName) { band = !band; prevName = r.name; }
         const rn = i + 2;
         const s = !r.fromPrice ? 4 : (band ? 3 : 2);
-        sheet += `<row r="${rn}">${cell('A' + rn, r.num, s)}${cell('B' + rn, r.article, s)}${cell('C' + rn, r.name, s)}</row>`;
+        sheet += `<row r="${rn}">${cell('A' + rn, r.num, s)}${cell('B' + rn, r.article, s)}${cell('C' + rn, r.name, s)}${cell('D' + rn, r.labelId && LABEL_ID_RE.test(r.labelId) ? r.labelId : '', s)}</row>`;
     });
 
-    sheet += `</sheetData><autoFilter ref="A1:C${n + 1}"/></worksheet>`;
+    sheet += `</sheetData><autoFilter ref="A1:D${n + 1}"/></worksheet>`;
     zip.file('xl/worksheets/sheet1.xml', sheet);
 
     return zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
