@@ -138,37 +138,40 @@ function itemsToWords(items) {
     return words;
 }
 
-// Новый ID может быть напечатан единым текстом или частями:
-// "ii5008184" + "3082" (последние цифры в чёрной плашке).
-// Собираем только соседние части ОДНОЙ строки и проверяем полный номер.
-// Промежуточные совпадения (до добавления хвоста) не учитываем.
+// Идентификатор ii в PDF может быть разделён на фрагменты разными шрифтами.
+// Объединяем ТОЛЬКО соседние фрагменты одной печатной строки, а не произвольные цифры страницы.
+function normalizedLabelPart(value) {
+    return String(value || '').replace(/[\u0456\u0406]/g, 'i') // кириллическая і
+        .replace(/[\u0131]/g, 'i')
+        .replace(/[\s\u00a0\u202f]/g, '').toLowerCase();
+}
+
 function labelIdsFromWords(words) {
     const result = new Set();
     const lines = [];
     for (const w of words) {
-        let line = lines.find(l => Math.abs(l.y - w.y) <= Math.max(2.5, Math.min(5, (w.h || 0) * .5)));
-        if (!line) { line = { y: w.y, words: [] }; lines.push(line); }
-        line.words.push(w);
+        const line = lines.find(l => Math.abs(l.y - w.y) <= Math.max(3, Math.min(7, Math.max(w.h || 0, l.h || 0) * 0.65)));
+        if (line) { line.words.push(w); line.h = Math.max(line.h, w.h || 0); }
+        else lines.push({ y: w.y, h: w.h || 0, words: [w] });
     }
     for (const line of lines) {
-        const sorted = line.words.sort((a, b) => a.x - b.x);
-        for (let i = 0; i < sorted.length; i++) {
-            // Старт строго с ii (допускаем разделение букв PDF-движком).
-            if (!/^i/i.test(sorted[i].text)) continue;
+        const ordered = line.words.sort((a, b) => a.x - b.x);
+        for (let i = 0; i < ordered.length; i++) {
             let combined = '';
             let right = null;
-            for (let j = i; j < sorted.length && j < i + 20; j++) {
-                const w = sorted[j];
-                // Достаточно для разрыва перед выделенными четырьмя цифрами,
-                // но не для произвольного поиска цифр на всей этикетке.
-                if (right !== null && w.x - right > Math.max(22, (w.h || 0) * 2)) break;
-                if (!/^(?:i{1,2}\d*|\d+)$/i.test(w.text)) break;
-                const next = combined + w.text;
-                if (!/^i{1,2}\d{0,16}$/i.test(next)) break;
+            for (let j = i; j < ordered.length && j < i + 20; j++) {
+                const w = ordered[j];
+                const part = normalizedLabelPart(w.text);
+                if (right !== null && w.x - right > Math.max(24, (w.h || 0) * 2.5)) break;
+                if (!/^[i0-9]+$/.test(part)) break;
+                const next = combined + part;
+                if (!/^i{0,2}\d{0,16}$/.test(next)) break;
                 combined = next;
                 right = Math.max(right === null ? -Infinity : right, w.x + w.w);
             }
-            if (LABEL_ID_RE.test(combined)) result.add(combined.toLowerCase());
+            // Не считаем короткий префикс подходящим, если после него стоит продолжение.
+            // Длина у ii-идентификаторов определяется конкретным PDF.
+            if (LABEL_ID_RE.test(combined)) result.add(combined);
         }
     }
     return [...result];
@@ -264,9 +267,11 @@ async function handleLp(file) {
 
                     // Серый ID расположен под номером отправления в той же
                     // колонке. Берём его только в пределах соответствующей строки.
+                    // Серый ШК часто расположен правее номера отправления и может
+                    // попадать ниже 24 pt. Вся полоса строки безопаснее узкой зоны.
                     const labelCandidates = labelIdsFromWords(words.filter(w =>
-                        w.x >= 25 && w.x < 190 && w.y <= a.y + 2 &&
-                        w.y >= bottom && w.y >= a.y - 24));
+                        w.x >= Math.max(20, a.x - 12) && w.x < 270 &&
+                        w.y <= a.y + 5 && w.y >= bottom));
                     const labelId = labelCandidates.length === 1 ? labelCandidates[0] : null;
                     const existing = rowsMap.get(a.num);
                     if (existing) {
@@ -318,10 +323,34 @@ function stickerNumberFromPage(tc) {
         const m = STICKER_GLUE_RE.exec(t);
         if (m) return m[1];
     }
-    // 3) склейка без пробелов в объединённом тексте
-    const joined = tc.items.map(i => (i.str || '').trim()).join('').replace(/\s+/g, '');
-    const m = /(\d{5,10}-\d{3,5}-\d{1,3})\d{4}/.exec(joined);
-    if (m) return m[1];
+    // 3) Старые Ozon: номер на самой наклейке напечатан в ДВЕ строки.
+    // Пример из реального PDF: «4414 0656» + «-0784-1».
+    // Не смешиваем адрес с номером: начинаем с длинного цифрового фрагмента,
+    // затем берём только непосредственно следующий числовой хвост с дефисами.
+    const parts = tc.items.map(it => (it.str || '').trim()).filter(Boolean);
+    for (let i = 0; i < parts.length; i++) {
+        const first = parts[i].replace(/\s+/g, '');
+        const direct = /(?:^|\D)(\d{5,10}-\d{3,5}-\d{1,3})(?!\d)/.exec(first);
+        if (direct) return direct[1];
+        if (!/^\d{5,10}$/.test(first)) continue;
+        for (let j = i + 1; j < Math.min(parts.length, i + 4); j++) {
+            const suffix = parts[j].replace(/\s+/g, '');
+            if (/^-\d{3,5}-\d{1,3}$/.test(suffix)) return first + suffix;
+            if (/[А-Яа-яA-Za-z]/.test(suffix)) break;
+        }
+    }
+    // 4) На случай, если pdf.js разделил даже цифровую часть на
+    // несколько элементов: собираем только числовые фрагменты подряд.
+    let numericRun = '';
+    for (const raw of parts) {
+        const part = raw.replace(/\s+/g, '');
+        if (/^[\d-]+$/.test(part)) {
+            numericRun += part;
+            const matches = numericRun.match(/(?:^|\D)(\d{5,10}-\d{3,5}-\d{1,3})(?!\d)/);
+            if (matches) return matches[1];
+            if (numericRun.length > 40) numericRun = part;
+        } else numericRun = '';
+    }
     return null;
 }
 
