@@ -43,13 +43,13 @@
                 </div>
                 <div class="panel-body">
                     <div class="upload-area" id="shkUploadArea">
-                        <p class="area-desc">Загрузите <strong>PDF с этикетками Ozon</strong> (ticket.pdf) —<br>картинки встанут в колонку «Этикетка», «шк по порядку» — в порядке листа</p>
+                        <p class="area-desc">Загрузите <strong>PDF с этикетками Ozon</strong> (ticket.pdf) —<br>номера сопоставим с заказами, отдельный PDF — в порядке листа</p>
                         <input type="file" id="shkFileInput" accept=".pdf" style="display:none">
                         <button class="upload-btn" onclick="document.getElementById('shkFileInput').click()">⬆️ Выбрать PDF</button>
                         <p class="hint">или перетащите файл сюда</p>
                         <p id="shkFileName" class="file-name"></p>
                     </div>
-                    <div id="shkStatus" class="status">Обязательно: картинки для колонки «Этикетка»</div>
+                    <div id="shkStatus" class="status">Обязательно: номера этикеток для сопоставления</div>
                 </div>
             </div>
             <!-- Плашка: прайс 1С (Excel) -->
@@ -118,5 +118,6 @@
     </div>
     <script src="https://misha-spec.github.io/sistema_bystrogo_scheta_po_trakhtenbergu/data/ozon/lp-pics/script.js?v=4"></script>
 <script src="ozon-ii-patch.js"></script>
+<script src="ozon-excel-shk-patch.js"></script>
 </body>
 </html>

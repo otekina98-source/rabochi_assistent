@@ -111,7 +111,8 @@
                 let missing=0, duplicate=0;
                 const owners=new Map();
                 for(const row of listData.rows) {
-                    const identifier=iiByPost.get(row.posting)||row.posting;
+                    row.shkId = iiByPost.get(row.posting) || '';
+                    const identifier=row.shkId||row.posting;
                     const pages=map.get(norm(identifier));
                     if(!pages?.length){missing++;continue;}
                     for(const pg of pages) {
