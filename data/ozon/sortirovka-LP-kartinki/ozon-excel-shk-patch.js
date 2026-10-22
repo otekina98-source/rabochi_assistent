@@ -119,7 +119,40 @@
         // Колонка теперь содержит полный номер ШК, а не 4 цифры.
         sheet=sheet.replace(new RegExp('<col\\b(?=[^>]*\\bmin="'+stickerIndex+'")(?=[^>]*\\bmax="'+stickerIndex+'")[^>]*/>'),
           m => m.replace(/width="[^"]+"/,'width="25"'));
+        // Убираем «Наименование ЛК» (D), оставляя только название 1С.
+        // Удаляем D во всех строках; остальные столбцы сдвигаем влево.
+        sheet=sheet.replace(/<c\b[^>]*\br="D\d+"[^>]*?(?:\/>|>[\s\S]*?<\/c>)/g,'');
+        const shiftLetter = letter => {
+            const n=[...letter].reduce((v,ch)=>v*26+ch.charCodeAt(0)-64,0);
+            let x=n-1,out='';
+            while(x){x--;out=String.fromCharCode(65+x%26)+out;x=Math.floor(x/26);}
+            return out;
+        };
+        sheet=sheet.replace(/(<c\b[^>]*\br=")([A-Z]+)(\d+")/g,(whole,a,col,b) =>
+            a+(col==='A'||col==='B'||col==='C'?col:shiftLetter(col))+b);
+        // В оригинале каждый столбец имеет отдельный элемент col.
+        sheet=sheet.replace(/<col\b[^>]*\bmin="4"[^>]*\/>/g,'');
+        sheet=sheet.replace(/<col\b[^>]*\/>/g, tag =>
+            tag.replace(/\b(min|max)="(\d+)"/g,(whole,attr,num)=>attr+'="'+(Number(num)>4?Number(num)-1:num)+'"'));
+        const newLast=shiftLetter(stickerCol);
+        sheet=sheet.replace(/(<dimension ref="[A-Z]+1:)[A-Z]+(\d+"\/>)/,'$1'+newLast+'$2');
+        sheet=sheet.replace(/(<autoFilter ref="[A-Z]+1:)[A-Z]+(\d+"\/>)/,'$1'+newLast+'$2');
         zip.file('xl/worksheets/sheet1.xml',sheet);
         return zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6}});
     };
+    // Предпросмотр на странице: оставляем только «Наименование 1С».
+    renderPreview = function () {
+        const rows=built.rows;
+        const limit=showAllMode?rows.length:Math.min(rows.length,100);
+        const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, c=>
+            ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        document.getElementById('resultsBody').innerHTML=rows.slice(0,limit).map(r=>
+            '<tr class="'+(r.miss?'from-lp':'')+'">'+
+            '<td>'+esc(r.docNum||'—')+'</td><td>'+esc(r.posting)+'</td>'+
+            '<td class="name-cell">'+esc(r.name1c||r.name||'—')+'</td>'+
+            '<td>'+esc(r.article||'—')+'</td><td><b>'+esc(r.shkId||r.posting||'—')+'</b></td>'+
+            '<td>'+(r.photo?'✓':'—')+'</td></tr>').join('')+
+            (limit<rows.length?'<tr><td colspan="6">… и ещё '+(rows.length-limit)+' строк</td></tr>':'');
+    };
+
 })();
