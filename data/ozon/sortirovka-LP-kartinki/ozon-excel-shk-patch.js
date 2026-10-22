@@ -80,6 +80,7 @@
         // Лишь картинки ЭТИКЕТОК временно исключаем из xlsx.
         const labels = rows.map(r => r.label);
         const iiMap = new Map((listData && listData.rows || []).map(r => [r.posting,r.shkId || '']));
+        // Берём новый номер из того же сопоставления, что используется для PDF.
         let result;
         try {
             rows.forEach(r => { r.label = null; });

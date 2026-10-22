@@ -1,0 +1,290 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #FAF8FF;
+    color: #1d1d1f;
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 30px 20px;
+}
+
+.back-btn {
+    background: #E6E6FA;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 1em;
+    margin-bottom: 20px;
+    color: #1d1d1f;
+}
+
+.back-btn:hover { background: #D8BFD8; }
+
+.sverka-header h2 { font-size: 2em; margin-bottom: 5px; }
+.title-icon { vertical-align: -0.18em; margin-right: 10px; filter: drop-shadow(0 3px 8px rgba(227, 19, 191, 0.35)); }
+.subtitle { color: #86868b; margin-bottom: 30px; font-size: 0.95em; }
+
+.pack-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 25px;
+}
+
+.panel {
+    background: white;
+    border-radius: 16px;
+    border: 2px solid #E6E6FA;
+    display: flex;
+    flex-direction: column;
+    min-height: 300px;
+}
+
+.panel-header {
+    padding: 18px 20px;
+    border-bottom: 2px solid #E6E6FA;
+    background: #FAF8FF;
+    border-radius: 14px 14px 0 0;
+}
+
+.panel-header h3 {
+    font-size: 1.15em;
+    color: #1d1d1f;
+}
+
+.panel-body {
+    padding: 20px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Подпись-описание внутри окошка загрузки */
+.area-desc {
+    color: #1d1d1f;
+    font-size: 0.95em;
+    line-height: 1.5;
+    margin-bottom: 18px;
+    text-align: center;
+}
+
+.upload-area {
+    border: 2px dashed #F4A7DC;
+    border-radius: 12px;
+    padding: 26px 15px;
+    text-align: center;
+    background: #FAF8FF;
+    transition: all 0.3s;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.upload-area.dragover { border-color: #e313bf; background: #FDF2FA; }
+
+.upload-area.loaded { border-style: solid; border-color: #28a745; background: #F6FFF9; }
+
+.upload-btn {
+    background: #F4A7DC;
+    color: #1d1d1f;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 1em;
+    font-weight: 500;
+}
+
+.upload-btn:hover { background: #ef8ecf; }
+
+.hint { color: #86868b; font-size: 0.85em; margin-top: 10px; }
+.file-name { color: #1d1d1f; font-weight: 500; margin-top: 10px; font-size: 0.9em; word-break: break-all; }
+
+.status { margin-top: 10px; font-size: 0.85em; color: #86868b; }
+.status.success { color: #28a745; }
+.status.error { color: #dc3545; }
+
+.start-btn {
+    width: 100%;
+    background: linear-gradient(135deg, #e313bf, #a80d90);
+    color: white;
+    border: none;
+    padding: 18px;
+    border-radius: 14px;
+    font-size: 1.2em;
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: 25px;
+    letter-spacing: 0.5px;
+}
+
+.start-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(227, 19, 191, 0.4);
+}
+
+.start-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.progress-section { margin-bottom: 25px; }
+.progress-stats { display: flex; justify-content: space-between; margin-bottom: 8px; }
+.progress-bar { width: 100%; height: 12px; background: #E6E6FA; border-radius: 6px; overflow: hidden; }
+.progress-fill { height: 100%; background: linear-gradient(90deg, #e313bf, #a80d90); width: 0%; transition: width 0.3s; }
+.progress-details { margin-top: 8px; font-size: 0.85em; color: #86868b; }
+
+.warnings-section { margin-bottom: 25px; }
+
+.warning-box {
+    background: #FFF8E6;
+    border: 2px solid #FFD666;
+    border-radius: 12px;
+    padding: 14px 18px;
+    font-size: 0.9em;
+    line-height: 1.5;
+    color: #7a5b00;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.warning-box strong { color: #5c4500; }
+
+.results-section h3 { font-size: 1.5em; margin-bottom: 20px; }
+.preview-title { font-size: 1em; color: #86868b; font-weight: 500; margin: 5px 0 12px; }
+
+.summary {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 15px;
+    margin-bottom: 25px;
+}
+
+.summary-card {
+    background: white;
+    border: 2px solid #E6E6FA;
+    border-radius: 12px;
+    padding: 18px;
+    text-align: center;
+}
+
+.summary-card .num { font-size: 2em; font-weight: 700; display: block; color: #1d1d1f; }
+.summary-card .lbl { font-size: 0.85em; color: #86868b; margin-top: 5px; }
+.summary-card.ok { border-color: #28a745; background: #F6FFF9; }
+.summary-card.warn { border-color: #FFD666; background: #FFF8E6; }
+.summary-card.miss { border-color: #dc3545; background: #fff5f5; }
+
+.download-row {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 25px;
+    flex-wrap: wrap;
+}
+
+.table-wrapper {
+    max-height: 500px;
+    overflow-y: auto;
+    border: 2px solid #E6E6FA;
+    border-radius: 12px;
+    margin-bottom: 20px;
+}
+
+table { width: 100%; border-collapse: collapse; }
+th { background: #E6E6FA; padding: 14px; text-align: left; position: sticky; top: 0; color: #1d1d1f; }
+td { padding: 12px 14px; border-bottom: 1px solid #F0E6FF; font-family: 'Courier New', monospace; color: #1d1d1f; }
+td.name-cell { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+tbody tr:hover { background: #FAF8FF; }
+
+/* Чередование полос по блокам товаров (как в файле). Цвет берём из темы
+   (--page-text): в тёмных темах полоса светлая, в светлых — тёмная. */
+tbody tr.band {
+    background: color-mix(in srgb, var(--page-text, #1d1d2b) 7%, transparent) !important;
+}
+tbody tr.band:hover {
+    background: color-mix(in srgb, var(--page-text, #1d1d2b) 12%, transparent) !important;
+}
+
+/* Отказ покупателем — жёлтая подсветка поверх полос (читается в любой теме) */
+tbody tr.from-lp {
+    background: color-mix(in srgb, #ffd666 24%, transparent) !important;
+}
+tbody tr.from-lp:hover {
+    background: color-mix(in srgb, #ffd666 34%, transparent) !important;
+}
+
+.badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.85em; font-family: -apple-system, sans-serif; white-space: nowrap; }
+.badge.ok { background: #D4EDDA; color: #155724; }
+.badge.warn { background: #FFF3CD; color: #856404; }
+
+.export-btn {
+    background: #E6E6FA;
+    color: #1d1d1f;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 1em;
+}
+
+.export-btn:hover { background: #D8BFD8; }
+
+.export-btn.primary {
+    background: linear-gradient(135deg, #e313bf, #a80d90);
+    color: white;
+    font-weight: 600;
+    flex: 1;
+    max-width: 380px;
+    padding: 14px 24px;
+}
+
+.export-btn.primary:hover { box-shadow: 0 6px 20px rgba(227, 19, 191, 0.4); transform: translateY(-1px); }
+
+.hidden { display: none !important; }
+
+@media (max-width: 1000px) {
+    .pack-layout { grid-template-columns: 1fr; }
+    .panel { min-height: auto; }
+    .summary { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 600px) {
+    .summary { grid-template-columns: 1fr; }
+    .download-row { flex-direction: column; }
+    .export-btn.primary { max-width: none; }
+}
+
+/* ===== Компактные панели загрузки (только этот инструмент) ===== */
+.pack-layout {
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 12px;
+    margin-bottom: 15px;
+}
+.pack-layout .panel-header {
+    padding: 9px 14px;
+    border-bottom-width: 1px;
+    border-radius: 12px 12px 0 0;
+}
+.pack-layout .panel-header h3 { font-size: 0.98em; }
+.pack-layout .panel-body { padding: 10px 12px; }
+.pack-layout .area-desc {
+    font-size: 0.8em;
+    line-height: 1.35;
+    margin-bottom: 8px;
+}
+.pack-layout .upload-area {
+    padding: 10px 8px;
+    border-radius: 10px;
+}
+.pack-layout .upload-btn {
+    padding: 7px 16px;
+    font-size: 0.88em;
+    border-radius: 8px;
+}
+.pack-layout .hint { margin-top: 5px; font-size: 0.75em; }
+.pack-layout .file-name { margin-top: 5px; font-size: 0.78em; }
+.pack-layout .status { margin-top: 6px; font-size: 0.78em; }

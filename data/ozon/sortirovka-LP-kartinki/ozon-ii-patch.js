@@ -4,9 +4,16 @@
 (function () {
     'use strict';
     const captured = Object.create(null);
+    // Сохраняем ссылку на файл для обеих поддерживаемых загрузок:
+    // «Выбрать PDF» И перетаскивание в область загрузки.
     document.addEventListener('change', e => {
-        if (e.target && e.target.type === 'file' && e.target.files?.length) {
-            captured[e.target.id] = e.target.files[0];
+        if (e.target?.id === 'docxFileInput' && e.target.files?.[0]) {
+            captured.docxFileInput = e.target.files[0];
+        }
+    }, true);
+    document.addEventListener('drop', e => {
+        if (e.target?.closest?.('#docxUploadArea') && e.dataTransfer?.files?.[0]) {
+            captured.docxFileInput = e.dataTransfer.files[0];
         }
     }, true);
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://misha-spec.github.io/sistema_bystrogo_scheta_po_trakhtenbergu/assets/vendor/pdf.worker.min.js';
@@ -79,20 +86,50 @@
     // Исходный обработчик этикеток использует именно postingFromPage.
     postingFromPage = fromStickerPage;
 
+    // Привязка ШК строго к строке PDF: номер в левой колонке,
+    // ii расположен под ним, до начала следующего отправления.
     async function collectIIFromAssembly(file) {
-        const result=new Map();
-        const doc=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer()),useSystemFonts:true}).promise;
-        for(let p=1;p<=doc.numPages;p++) {
+        const result = new Map();
+        const doc = await pdfjsLib.getDocument({
+            data: new Uint8Array(await file.arrayBuffer()), useSystemFonts: true
+        }).promise;
+        for (let p=1;p<=doc.numPages;p++) {
             const tc=await (await doc.getPage(p)).getTextContent();
-            const words=itemsToWords(tc.items);
-            const lines=linesFromText(tc);
-            const anchors=words.filter(w=>w.x>=25&&w.x<190&&validPost.test(w.text));
-            // На каждой строке Ozon ii напечатан под номером заказа слева.
-            for(const a of anchors) {
-                const relevant=lines.filter(l=>l.y<=a.y+2&&l.y>=a.y-25&&l.words.some(w=>w.x>=20&&w.x<190))
-                  .map(l=>({...l,words:l.words.filter(w=>w.x>=20&&w.x<190)}));
-                const id=readII(relevant);
-                if(id)result.set(a.text,id);
+            const words=itemsToWords(tc.items).filter(w => w.text?.trim());
+            const anchors=[];
+            for(const w of words) {
+                if(w.x<25 || w.x>=190)continue;
+                if(validPost.test(w.text))anchors.push({...w, posting:w.text});
+                else {
+                    const m=/^(\d{1,4})(\d{8,10}-\d{3,5}-\d{1,3})$/.exec(w.text);
+                    if(m)anchors.push({...w,posting:m[2]});
+                }
+            }
+            anchors.sort((a,b)=>b.y-a.y);
+            for(let i=0;i<anchors.length;i++) {
+                const a=anchors[i];
+                const below= i+1<anchors.length ? (a.y+anchors[i+1].y)/2 : -Infinity;
+                const inRow=words.filter(w=>w.x>=25 && w.x<190 && w.y<=a.y+3 && w.y>below);
+                const ids=[];
+                // PDF сохраняет серый номер цельным либо отдельными частями.
+                for(const line of linesFromText({items:tc.items.filter(it=>
+                    it.transform[4]>=25 && it.transform[4]<190 &&
+                    it.transform[5]<=a.y+3 && it.transform[5]>below
+                )})) {
+                    const m=/(?:^|[^a-z0-9])(ii\s*(?:\d\s*){8,16})(?!\d)/i.exec(line.text);
+                    if(m && validII.test(norm(m[1]))) ids.push(norm(m[1]));
+                }
+                // Иногда pdf.js ставит разные базовые линии внутри одного ШК.
+                if(!ids.length) {
+                    const sorted=inRow.sort((x,y)=>y.y-x.y||x.x-y.x);
+                    for(const w of sorted) {
+                        const id=norm(w.text);
+                        if(validII.test(id))ids.push(id);
+                    }
+                }
+                const unique=[...new Set(ids)];
+                if(unique.length>1)throw new Error('Несколько номеров ii для '+a.posting);
+                if(unique.length===1)result.set(a.posting,unique[0]);
             }
         }
         return result;
@@ -100,37 +137,43 @@
 
     const originalBuild=startBuild;
     startBuild=async function () {
-        // Перестраиваем ключи ДО начала штатной сборки.
-        // Этого достаточно и для картинок в Excel, и для PDF: обе ветки
-        // исходного приложения используют одну shkData.pageOf.
-        if (listData && shkData && captured.docxFileInput) {
-            try {
-                const iiByPost=await collectIIFromAssembly(captured.docxFileInput);
-                const map=new Map();
-                for(const [key,pages] of shkData.pageOf)map.set(norm(key),pages.slice());
-                let missing=0, duplicate=0;
-                const owners=new Map();
-                for(const row of listData.rows) {
-                    row.shkId = iiByPost.get(row.posting) || '';
-                    const identifier=row.shkId||row.posting;
-                    const pages=map.get(norm(identifier));
-                    if(!pages?.length){missing++;continue;}
-                    for(const pg of pages) {
-                        const existing=owners.get(pg);
-                        if(existing&&existing!==row.posting)duplicate++;
-                        owners.set(pg,row.posting);
-                    }
-                    // Штатный код сопоставляет по posting — добавляем точный
-                    // алиас заказа на страницу с новым ii, не меняя сам номер.
-                    shkData.pageOf.set(row.posting,pages.slice());
+        if(!(listData && shkData))return originalBuild();
+        // Загруженный файл запоминается при выборе и при перетаскивании.
+        // Не заменяем его по имени другим PDF и не используем пустой input
+        // (оригинальный интерфейс очищает input.value после загрузки).
+        if (!captured.docxFileInput) {
+            alert('Исходный PDF не сохранился в памяти страницы. Перезагрузите страницу и загрузите лист сборки снова.');
+            return;
+        }
+        try {
+            const iiByPost=await collectIIFromAssembly(captured.docxFileInput);
+            const owners=new Map();
+            const fullMatch=new Map();
+            for(const row of listData.rows) {
+                row.shkId=iiByPost.get(row.posting)||'';
+                const key=norm(row.shkId||row.posting);
+                const pages=shkData.pageOf.get(key)||[];
+                if(pages.length>1)throw new Error('Несколько наклеек с одинаковым номером '+key);
+                if(pages.length===1) {
+                    if(owners.has(pages[0]))throw new Error('Одна наклейка соответствует двум заказам');
+                    owners.set(pages[0],row.posting);
+                    fullMatch.set(row.posting,pages.slice());
                 }
-                if(duplicate)throw new Error('Одна и та же наклейка сопоставлена нескольким заказам: '+duplicate);
-                if(missing)console.warn('Ozon: заказов без найденной наклейки:',missing);
-            } catch(err) {
-                console.error('Ошибка нового сопоставления:',err);
-                alert('Не удалось проверить соответствия наклеек: '+err.message+'\nСборка остановлена, чтобы не получить PDF с неправильным порядком.');
-                return;
             }
+            // Удаляем псевдонимы от предыдущей сборки, чтобы повторное нажатие
+            // кнопки не оставляло устаревших совпадений.
+            for(const row of listData.rows) {
+                if(row.shkId)shkData.pageOf.delete(row.posting);
+            }
+            for(const [posting,pages] of fullMatch)shkData.pageOf.set(posting,pages);
+            const newRows=listData.rows.filter(r=>r.shkId);
+            console.info('Новые ШК ii:',newRows.map(r=>r.posting+' → '+r.shkId));
+            const missing=listData.rows.filter(r=>!fullMatch.has(r.posting));
+            if(missing.length)console.warn('Наклейки не найдены:',missing.map(r=>r.shkId||r.posting));
+        } catch(err) {
+            console.error(err);
+            alert('Ошибка сопоставления ШК: '+err.message+'\nСборка остановлена.');
+            return;
         }
         return originalBuild();
     };
