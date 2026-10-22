@@ -440,10 +440,11 @@ function buildXlsx(rows) {
     zip.file('xl/styles.xml',
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
         '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-        '<fonts count="3">' +
+        '<fonts count="4">' +
         '<font><sz val="11"/><name val="Calibri"/></font>' + // 0 — обычный
         '<font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font>' + // 1 — шапка
         '<font><sz val="11"/><color rgb="FF7A5B00"/><name val="Calibri"/></font>' + // 2 — подсвеченная строка
+        '<font><b/><sz val="14"/><color rgb="FF005BFF"/><name val="Calibri"/></font>' + // 3 — выделенные четыре цифры ШК
         '</fonts>' +
         '<fills count="5">' +
         '<fill><patternFill patternType="none"/></fill>' +
@@ -489,6 +490,23 @@ function buildXlsx(rows) {
     const cell = (ref, value, style) =>
         `<c r="${ref}"${style ? ` s="${style}"` : ''} t="inlineStr"><is><t xml:space="preserve">${escapeXml(value)}</t></is></c>`;
 
+    // Номер ШК всегда полный: новый ii... или обычный номер отправления.
+    // В XLSX выделяем исключительно нужную 4-значную группу, не изменяя текст номера.
+    const labelCell = (ref, r, style) => {
+        const value = r.labelId && LABEL_ID_RE.test(r.labelId) ? r.labelId : r.num;
+        const newId = /^(ii\d+)(\d{4})$/i.exec(value);
+        const oldId = /^(\d{1,6})(\d{4})(-\d{3,5}-\d{1,3})$/.exec(value);
+        const parts = newId ? [newId[1], newId[2], '']
+                    : oldId ? [oldId[1], oldId[2], oldId[3]] : null;
+        if (!parts) return cell(ref, value, style);
+        const run = (text, fontId) => text ?
+            `<r><rPr><rFont val="Calibri"/><sz val="${fontId === 3 ? 14 : 11}"/>` +
+            (fontId === 3 ? '<b/><color rgb="FF005BFF"/>' : '') +
+            `</rPr><t xml:space="preserve">${escapeXml(text)}</t></r>` : '';
+        return `<c r="${ref}"${style ? ` s="${style}"` : ''} t="inlineStr"><is>` +
+            run(parts[0], 0) + run(parts[1], 3) + run(parts[2], 0) + '</is></c>';
+    };
+
     sheet += `<row r="1">${cell('A1', 'Номер отправления', 1)}${cell('B1', 'Артикул', 1)}${cell('C1', 'Товар', 1)}${cell('D1', 'Номер ШК', 1)}</row>`;
 
     // Чередование серых полос по блокам одинаковых товаров (видно при ч/б печати)
@@ -498,7 +516,7 @@ function buildXlsx(rows) {
         if (r.name !== prevName) { band = !band; prevName = r.name; }
         const rn = i + 2;
         const s = !r.fromPrice ? 4 : (band ? 3 : 2);
-        sheet += `<row r="${rn}">${cell('A' + rn, r.num, s)}${cell('B' + rn, r.article, s)}${cell('C' + rn, r.name, s)}${cell('D' + rn, r.labelId && LABEL_ID_RE.test(r.labelId) ? r.labelId : '', s)}</row>`;
+        sheet += `<row r="${rn}">${cell('A' + rn, r.num, s)}${cell('B' + rn, r.article, s)}${cell('C' + rn, r.name, s)}${labelCell('D' + rn, r, s)}</row>`;
     });
 
     sheet += `</sheetData><autoFilter ref="A1:D${n + 1}"/></worksheet>`;
