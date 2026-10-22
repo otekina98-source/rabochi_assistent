@@ -1,0 +1,17 @@
+/* Только оформление новой страницы: четыре блока в одной строке. */
+body { background: #faf8ff; }
+.container { max-width: 1550px; margin: 0 auto; padding: 26px 20px; }
+.sverka-header { margin: 0 0 22px; }
+.sverka-header h2 { font-size: clamp(23px, 2.4vw, 34px); line-height: 1.2; margin: 0 0 8px; }
+.sverka-header .subtitle { margin: 0; }
+.pack-layout { display: grid !important; grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: 14px !important; align-items: stretch; margin-bottom: 24px; }
+.pack-layout > .panel { min-width: 0; min-height: 265px; }
+.pack-layout .panel-header { padding: 14px 12px; }
+.pack-layout .panel-header h3 { font-size: 1rem; }
+.pack-layout .panel-body { padding: 12px; }
+.pack-layout .upload-area { padding: 14px 8px; }
+.pack-layout .area-desc { font-size: .88rem; margin-bottom: 10px; overflow-wrap: anywhere; }
+.pack-layout .upload-btn { padding: 10px 12px; font-size: .92rem; }
+.pack-layout .status { overflow-wrap: anywhere; }
+@media(max-width: 1050px) { .pack-layout { grid-template-columns: repeat(2,minmax(0,1fr)) !important; } }
+@media(max-width: 560px) { .pack-layout { grid-template-columns: 1fr !important; } }

@@ -12,8 +12,13 @@ const ozonChecks = [
     },
 {
         id: 'podbor-stickers',
-        title: 'Сортировка ЛП и ШК по порядку',
+        title: 'Сортировка ЛП и ШК по порядку без картинок',
         path: 'data/ozon/podbor-stickers/index.html'
+    },
+{
+        id: 'sortirovka-LP-kartinki',
+        title: 'Сортировка ЛП и ШК с картинками',
+        path: 'data/ozon/sortirovka-LP-kartinki/index.html'
     },
    
 ];

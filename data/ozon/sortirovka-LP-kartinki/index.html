@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Сортировка ЛП с картинками — Ozon</title>
+    <link rel="stylesheet" href="https://misha-spec.github.io/sistema_bystrogo_scheta_po_trakhtenbergu/data/ozon/lp-pics/styles.css">
+    <link rel="stylesheet" href="layout.css">
+    <script src="https://misha-spec.github.io/sistema_bystrogo_scheta_po_trakhtenbergu/assets/vendor/xlsx.full.min.js"></script>
+    <script src="https://misha-spec.github.io/sistema_bystrogo_scheta_po_trakhtenbergu/assets/vendor/jszip.min.js"></script>
+    <script src="https://misha-spec.github.io/sistema_bystrogo_scheta_po_trakhtenbergu/assets/vendor/pdf.min.js"></script>
+    <script src="https://misha-spec.github.io/sistema_bystrogo_scheta_po_trakhtenbergu/assets/vendor/pdf-lib.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <button class="back-btn" onclick="window.location.href='../../../index.html'">← В меню</button>
+        <div class="sverka-header">
+            <h2>Сортировка ЛП с картинками</h2>
+            <p class="subtitle">Лист сборки Ozon + этикетки + прайс 1С + заказы из 1С</p>
+        </div>
+
+        <div class="pack-layout">
+            <!-- Плашка: лист сборки (PDF) -->
+            <div class="panel upload-panel">
+                <div class="panel-header">
+                    <h3>📄 Лист сборки (PDF)</h3>
+                </div>
+                <div class="panel-body">
+                    <div class="upload-area" id="docxUploadArea">
+                        <p class="area-desc">Загрузите <strong>Лист сборки из ЛК Ozon</strong> (assembly_list.pdf) —<br>фото возьмём прямо из PDF в идеальном качестве</p>
+                        <input type="file" id="docxFileInput" accept=".pdf" style="display:none">
+                        <button class="upload-btn" onclick="document.getElementById('docxFileInput').click()">⬆️ Выбрать PDF</button>
+                        <p class="hint">или перетащите файл сюда</p>
+                        <p id="docxFileName" class="file-name"></p>
+                    </div>
+                    <div id="docxStatus" class="status">Обязательно: фото, названия, артикулы и коды этикеток</div>
+                </div>
+            </div>
+            <!-- Плашка: этикетки (PDF) -->
+            <div class="panel upload-panel">
+                <div class="panel-header">
+                    <h3>🏷️ Этикетки (PDF)</h3>
+                </div>
+                <div class="panel-body">
+                    <div class="upload-area" id="shkUploadArea">
+                        <p class="area-desc">Загрузите <strong>PDF с этикетками Ozon</strong> (ticket.pdf) —<br>картинки встанут в колонку «Этикетка», «шк по порядку» — в порядке листа</p>
+                        <input type="file" id="shkFileInput" accept=".pdf" style="display:none">
+                        <button class="upload-btn" onclick="document.getElementById('shkFileInput').click()">⬆️ Выбрать PDF</button>
+                        <p class="hint">или перетащите файл сюда</p>
+                        <p id="shkFileName" class="file-name"></p>
+                    </div>
+                    <div id="shkStatus" class="status">Обязательно: картинки для колонки «Этикетка»</div>
+                </div>
+            </div>
+            <!-- Плашка: прайс 1С (Excel) -->
+            <div class="panel upload-panel">
+                <div class="panel-header">
+                    <h3>📖 Прайс 1С (Excel)</h3>
+                </div>
+                <div class="panel-body">
+                    <div class="upload-area" id="priceUploadArea">
+                        <p class="area-desc">Загрузите <strong>прайс 1С</strong> —<br>по артикулу заполнится столбик «Наименование 1С»</p>
+                        <input type="file" id="priceFileInput" accept=".xlsx,.xls" style="display:none">
+                        <button class="upload-btn" onclick="document.getElementById('priceFileInput').click()">⬆️ Выбрать Excel</button>
+                        <p class="hint">или перетащите файл сюда</p>
+                        <p id="priceFileName" class="file-name"></p>
+                    </div>
+                    <div id="priceStatus" class="status">Обязательно: первый столбик — артикул, второй — название</div>
+                </div>
+            </div>
+            <!-- Плашка: заказы из 1С (Excel) -->
+            <div class="panel upload-panel">
+                <div class="panel-header">
+                    <h3>📦 Заказы из 1С (Excel)</h3>
+                </div>
+                <div class="panel-body">
+                    <div class="upload-area" id="ordersUploadArea">
+                        <p class="area-desc">Загрузите <strong>файл заказов</strong> —<br>номера заказов ищем <strong>только по «Телефон 1»</strong> (в нём записан номер отправления); если столбика нет — «ID отправления» из «Комментария»</p>
+                        <input type="file" id="ordersFileInput" accept=".xlsx,.xls" style="display:none">
+                        <button class="upload-btn" onclick="document.getElementById('ordersFileInput').click()">⬆️ Выбрать Excel</button>
+                        <p class="hint">или перетащите файл сюда</p>
+                        <p id="ordersFileName" class="file-name"></p>
+                    </div>
+                    <div id="ordersStatus" class="status">Обязательно: «Номер документа» + «Телефон 1»</div>
+                </div>
+            </div>
+        </div>
+        <button class="start-btn" onclick="startBuild()" id="startBtn" disabled>📦 СОБРАТЬ ЛИСТ ПОДОБРА (EXCEL)</button>
+        <div id="progressSection" class="progress-section hidden">
+            <div class="progress-stats">
+                <span id="progressText">Обработка...</span>
+                <span id="progressPercent">0%</span>
+            </div>
+            <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+            <div class="progress-details" id="progressDetails"></div>
+        </div>
+        <div id="warningsSection" class="warnings-section hidden">
+            <div class="warning-box" id="warningsBox"></div>
+        </div>
+        <div id="resultsSection" class="results-section hidden">
+            <h3>📊 Результат</h3>
+            <div class="summary" id="summary"></div>
+            <div class="download-row">
+                <button class="export-btn primary" id="downloadBtn" disabled>📥 Скачать Лист подбора (Excel)</button>
+                <button class="export-btn primary" id="downloadShkBtn" disabled>📥 Скачать ШК по порядку (PDF)</button>
+            </div>
+            <h4 class="preview-title">Предпросмотр строк</h4>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr><th>№ документа</th><th>№ отправления</th><th>Наименование ЛК</th><th>Наименование 1С</th><th>Артикул</th><th>Стикер</th><th>Фото</th></tr>
+                    </thead>
+                    <tbody id="resultsBody"></tbody>
+                </table>
+            </div>
+            <button class="export-btn hidden" id="showAllBtn" onclick="showAllRows()">Показать все строки</button>
+        </div>
+    </div>
+    <script src="https://misha-spec.github.io/sistema_bystrogo_scheta_po_trakhtenbergu/data/ozon/lp-pics/script.js?v=4"></script>
+<script src="ozon-ii-patch.js"></script>
+</body>
+</html>
