@@ -44,6 +44,31 @@
         return '';
     }
     function fromStickerPage(tc) {
+        // В реальном ticket.pdf две части одного ШК имеют РАЗНЫЕ базовые линии:
+        // "ii5005890" + " 3451". Не требуем совпадения y для двух соседних
+        // текстовых элементов, но используем целый ID, а не 4 последние цифры.
+        const newChunks=tc.items.map(it => String(it.str || '').trim()).filter(Boolean);
+        const iiMatches=new Set();
+        for(let i=0;i<newChunks.length;i++) {
+            const first=norm(newChunks[i]);
+            if(!/^ii\d{4,12}$/.test(first) && !validII.test(first))continue;
+            if(validII.test(first))iiMatches.add(first);
+            // Суффикс находится непосредственно после префикса в порядке
+            // объектов PDF. Цифры адреса забирать нельзя: только отдельный
+            // соседний фрагмент и итоговая проверка полного номера.
+            if(i+1<newChunks.length && /^\d{4}$/.test(norm(newChunks[i+1]))) {
+                const full=first+norm(newChunks[i+1]);
+                if(validII.test(full))iiMatches.add(full);
+            }
+        }
+        // Ещё один вариант: pdf.js отдаёт номер одной печатной строкой.
+        const direct=(tc.items.map(it=>String(it.str||'')).join(' ')).match(/(?:^|[^a-z0-9])(ii\s*(?:\d\s*){8,16})(?!\d)/ig)||[];
+        for(const raw of direct) {
+            const id=norm(raw).replace(/^[^i]+/,'');
+            if(validII.test(id))iiMatches.add(id);
+        }
+        if(iiMatches.size===1)return [...iiMatches][0];
+        if(iiMatches.size>1)return null;
         const lines=linesFromText(tc);
         const ii=readII(lines);
         if(ii)return ii;
