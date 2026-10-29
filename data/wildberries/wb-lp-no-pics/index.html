@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Сортировка ЛП и ШК по порядку БЕЗ картинок — Wildberries</title>
+    <link rel="stylesheet" href="../wb-lp-pics/styles.css">
+    <link rel="stylesheet" href="../../../assets/site.css?v=3">
+    <link rel="stylesheet" href="../../../assets/themes.css">
+    <script>try{document.documentElement.setAttribute("data-theme",localStorage.getItem("ra-theme")||"light")}catch(e){}</script>
+    <script src="../wb-lp-pics/vendor/xlsx.full.min.js"></script>
+    <script src="../wb-lp-pics/vendor/jszip.min.js"></script>
+    <script src="../wb-lp-pics/vendor/pdf.min.js"></script>
+    <script src="../wb-lp-pics/vendor/pdf-lib.min.js"></script>
+</head>
+<body data-lp-mode="without-images">
+    <div class="container">
+        <button class="back-btn" onclick="window.location.href = window.location.pathname.includes('/data/') ? window.location.pathname.split('/data/')[0] + '/index.html' : '../../../index.html'">← В меню</button>
+
+        <div class="sverka-header">
+            <h2><svg class="title-icon" viewBox="0 0 48 48" width="36" height="36" aria-hidden="true"><defs><linearGradient id="lpPicsGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff4fd8"/><stop offset="1" stop-color="#a80d90"/></linearGradient></defs><rect x="3" y="3" width="42" height="42" rx="11" fill="url(#lpPicsGrad)"/><rect x="11" y="13" width="26" height="22" rx="3" fill="none" stroke="#fff" stroke-width="2.5"/><circle cx="19" cy="21" r="3" fill="#fff"/><path d="M12 33l8-8 5 5 6-7 6 8" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Сортировка ЛП и ШК по порядку БЕЗ картинок <span style="font-size:0.55em; color:#999; font-weight:400;">v12</span></h2>
+            <p class="subtitle">Лист подбора PDF + этикетки ШК PDF + прайс 1С + заказы из 1С • на выходе Excel: № документа, № задания, Наименование 1С, Артикул, Стикер + ШК по порядку (PDF)</p>
+        </div>
+
+        <div class="pack-layout">
+
+            <!-- Плашка: лист подбора (PDF) -->
+            <div class="panel upload-panel">
+                <div class="panel-header">
+                    <h3>📄 Лист подбора (PDF)</h3>
+                </div>
+                <div class="panel-body">
+                    <div class="upload-area" id="docxUploadArea">
+                        <p class="area-desc">Загрузите <strong>печатный Лист подбора</strong> (PDF из ЛК) —<br>в Excel оставим только пять нужных колонок</p>
+                        <input type="file" id="docxFileInput" accept=".pdf" style="display:none">
+                        <button class="upload-btn" onclick="document.getElementById('docxFileInput').click()">⬆️ Выбрать PDF</button>
+                        <p class="hint">или перетащите файл сюда</p>
+                        <p id="docxFileName" class="file-name"></p>
+                    </div>
+                    <div id="docxStatus" class="status">Обязательно: номера заданий, наименования, артикулы и стикеры</div>
+                </div>
+            </div>
+
+            <!-- Плашка: этикетки ШК (PDF) -->
+            <div class="panel upload-panel">
+                <div class="panel-header">
+                    <h3>🏷️ Этикетки ШК (PDF)</h3>
+                </div>
+                <div class="panel-body">
+                    <div class="upload-area" id="shkUploadArea">
+                        <p class="area-desc">Загрузите <strong>PDF со стикерами ШК</strong> —<br>соберём отдельный PDF с ШК в порядке строк листа</p>
+                        <input type="file" id="shkFileInput" accept=".pdf" style="display:none">
+                        <button class="upload-btn" onclick="document.getElementById('shkFileInput').click()">⬆️ Выбрать PDF</button>
+                        <p class="hint">или перетащите файл сюда</p>
+                        <p id="shkFileName" class="file-name"></p>
+                    </div>
+                    <div id="shkStatus" class="status">Обязательно: для PDF «ШК по порядку»</div>
+                </div>
+            </div>
+
+            <!-- Плашка: прайс 1С (Excel) -->
+            <div class="panel upload-panel">
+                <div class="panel-header">
+                    <h3>📖 Прайс 1С (Excel)</h3>
+                </div>
+                <div class="panel-body">
+                    <div class="upload-area" id="priceUploadArea">
+                        <p class="area-desc">Загрузите <strong>прайс 1С</strong> —<br>по артикулу заполнится столбик «Наименование 1С»</p>
+                        <input type="file" id="priceFileInput" accept=".xlsx,.xls" style="display:none">
+                        <button class="upload-btn" onclick="document.getElementById('priceFileInput').click()">⬆️ Выбрать Excel</button>
+                        <p class="hint">или перетащите файл сюда</p>
+                        <p id="priceFileName" class="file-name"></p>
+                    </div>
+                    <div id="priceStatus" class="status">Обязательно: первый столбик — артикул, второй — название</div>
+                </div>
+            </div>
+
+            <!-- Плашка: заказы МБТ 30 -->
+            <div class="panel upload-panel">
+                <div class="panel-header">
+                    <h3>📦 Заказы из 1С (Excel)</h3>
+                </div>
+                <div class="panel-body">
+                    <div class="upload-area" id="ordersUploadArea">
+                        <p class="area-desc">Загрузите <strong>файл заказов</strong> —<br>по «Идентификатору МП» или «Телефон1» возьмём «Номер документа»</p>
+                        <input type="file" id="ordersFileInput" accept=".xlsx,.xls" style="display:none">
+                        <button class="upload-btn" onclick="document.getElementById('ordersFileInput').click()">⬆️ Выбрать Excel</button>
+                        <p class="hint">или перетащите файл сюда</p>
+                        <p id="ordersFileName" class="file-name"></p>
+                    </div>
+                    <div id="ordersStatus" class="status">Обязательно: «Номер документа» + «Идентификатор МП» или «Телефон1»</div>
+                </div>
+            </div>
+        </div>
+
+        <button class="start-btn" onclick="startBuild()" id="startBtn" disabled>📦 СОБРАТЬ ЛИСТ ПОДБОРА (EXCEL)</button>
+
+        <div id="progressSection" class="progress-section hidden">
+            <div class="progress-stats">
+                <span id="progressText">Обработка...</span>
+                <span id="progressPercent">0%</span>
+            </div>
+            <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+            <div class="progress-details" id="progressDetails"></div>
+        </div>
+
+        <div id="warningsSection" class="warnings-section hidden">
+            <div class="warning-box" id="warningsBox"></div>
+        </div>
+
+        <div id="resultsSection" class="results-section hidden">
+            <h3>📊 Результат</h3>
+            <div class="summary" id="summary"></div>
+            <div class="download-row">
+                <button class="export-btn primary" id="downloadBtn" disabled>📥 Скачать Лист подбора (Excel)</button>
+                <button class="export-btn primary" id="downloadShkBtn" disabled>📥 Скачать ШК по порядку (PDF)</button>
+            </div>
+            <h4 class="preview-title">Предпросмотр строк</h4>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr><th>№ документа</th><th>№ задания</th><th>Наименование 1С</th><th>Артикул</th><th>Стикер</th></tr>
+                    </thead>
+                    <tbody id="resultsBody"></tbody>
+                </table>
+            </div>
+            <button class="export-btn hidden" id="showAllBtn" onclick="showAllRows()">Показать все строки</button>
+        </div>
+    </div>
+
+    <script src="../wb-lp-pics/script.js?v=14"></script>
+
+    <script src="../../../assets/audio.js?v=4"></script>
+    <script src="../../../assets/themes.js"></script>
+    <script src="../../../assets/theme.js"></script>
+</body>
+</html>

@@ -1,5 +1,6 @@
 // Use the matching local PDF.js worker; no CDN access is needed at runtime.
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('vendor/pdf.worker.min.js', document.currentScript.src).href;
+const LP_WITHOUT_IMAGES = document.body.dataset.lpMode === 'without-images';
 
 /* ЛП ВБ с картинками и 1С
    Вход:  Лист подбора в Word (конверт из PDF, напр. tools.pdf24.org),
@@ -256,7 +257,7 @@ async function handleListPdf(file) {
             }
         }
         listData = { rows: rows, name: file.name };
-        setStatus('docxStatus', `✅ Строк: ${rows.length} (фото: ${rows.filter(r => r.photo).length})`, 'success');
+        setStatus('docxStatus', `✅ Строк: ${rows.length}${LP_WITHOUT_IMAGES ? '' : ' (фото: ' + rows.filter(r => r.photo).length + ')'}`, 'success');
     } catch (err) {
         listData = null;
         setStatus('docxStatus', '❌ Ошибка: ' + err.message, 'error');
@@ -528,11 +529,11 @@ function buildLpXlsx(rows) {
     const LBL_H = 170;
     const imgs = [];
     rows.forEach((r, i) => {
-        if (r.photo) {
+        if (!LP_WITHOUT_IMAGES && r.photo) {
             const dim = (r.photo.w && r.photo.h) ? { w: r.photo.w, h: r.photo.h } : imageSize(r.photo.bytes, r.photo.ext);
             imgs.push({ row0: i + 1, col: 2, bytes: r.photo.bytes, ext: r.photo.ext, w: dim.w, h: dim.h, rowOff: Math.max(2, Math.round((109 - dim.h) / 2)) });
         }
-        if (r.label) {
+        if (!LP_WITHOUT_IMAGES && r.label) {
             const k = 100 / r.label.h;
             imgs.push({ row0: i + 1, col: 7, bytes: r.label.bytes, ext: 'png', w: Math.round(r.label.w * k), h: 100, rowOff: 4 });
         }
@@ -634,13 +635,14 @@ function buildLpXlsx(rows) {
         '<cellStyles count="1"><cellStyle name="Обычный" xfId="0" builtinId="0"/></cellStyles>' +
         '</styleSheet>');
 
-    const widths = [12.25, 11, 11, 22.875, 21.125, 9.75, 16.5, 21.2];
+    const widths = LP_WITHOUT_IMAGES ? [16, 14, 28, 12, 21] : [12.25, 11, 11, 22.875, 21.125, 9.75, 16.5, 21.2];
+    const lastCol = LP_WITHOUT_IMAGES ? 'E' : 'H';
     const n = rows.length;
     let sheet =
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
         '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
         '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>' +
-        `<dimension ref="A1:H${n + 1}"/>` +
+        `<dimension ref="A1:${lastCol}${n + 1}"/>` +
         '<sheetViews><sheetView workbookViewId="0">' +
         '<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>' +
         '</sheetView></sheetViews>' +
@@ -650,7 +652,7 @@ function buildLpXlsx(rows) {
         '</cols>' +
         '<sheetData>';
 
-    const HEADERS = ['№  документа', '№ задания', 'ФОТО', 'Наименование ЛК', 'Наименование 1С', 'Артикул', 'Стикер', 'Этикетка'];
+    const HEADERS = LP_WITHOUT_IMAGES ? ['№ документа', '№ задания', 'Наименование 1С', 'Артикул', 'Стикер'] : ['№  документа', '№ задания', 'ФОТО', 'Наименование ЛК', 'Наименование 1С', 'Артикул', 'Стикер', 'Этикетка'];
     const cellText = (col, rowIdx, value, s) =>
         `<c r="${col}${rowIdx}" s="${s == null ? 2 : s}" t="inlineStr"><is><t xml:space="preserve">${escapeXml(value)}</t></is></c>`;
     const cellEmpty = (col, rowIdx, s) => `<c r="${col}${rowIdx}" s="${s == null ? 2 : s}"/>`;
@@ -678,21 +680,29 @@ function buildLpXlsx(rows) {
         if (key !== prevKey) { band = !band; prevKey = key; }
         const sBody = band ? 6 : 2, sCenter = band ? 7 : 3, sName = band ? 8 : 4;
         const rn = i + 2;
-        sheet += `<row r="${rn}"${(r.photo || r.label) ? ' ht="82" customHeight="1"' : ''}>`;
+        sheet += `<row r="${rn}"${(LP_WITHOUT_IMAGES || r.photo || r.label) ? ' ht="82" customHeight="1"' : ''}>`;
         sheet += cellText('A', rn, r.docNum || '', sBody);
         sheet += cellText('B', rn, r.num, sBody);
-        sheet += cellEmpty('C', rn, sBody); // фото — картинкой
-        sheet += cellText('D', rn, r.name || '', sBody);
-        sheet += `<c r="E${rn}" s="${r.miss ? 5 : sName}" t="inlineStr"><is><t xml:space="preserve">${escapeXml(r.name1c || '')}</t></is></c>`;
-        if (/^\d+$/.test(r.article)) sheet += cellNumber('F', rn, r.article, sCenter);
-        else sheet += cellText('F', rn, r.article || '', sBody);
-        if (r.sticker) sheet += cellSticker('G', rn, r.sticker, sCenter);
-        else sheet += cellEmpty('G', rn, sBody);
-        sheet += cellEmpty('H', rn, sBody); // этикетка — картинкой
+        if (LP_WITHOUT_IMAGES) {
+            sheet += cellText('C', rn, r.name1c || '', r.miss ? 5 : sName);
+            if (/^\d+$/.test(r.article)) sheet += cellNumber('D', rn, r.article, sCenter);
+            else sheet += cellText('D', rn, r.article || '', sBody);
+            if (r.sticker) sheet += cellSticker('E', rn, r.sticker, sCenter);
+            else sheet += cellEmpty('E', rn, sBody);
+        } else {
+            sheet += cellEmpty('C', rn, sBody); // фото — картинкой
+            sheet += cellText('D', rn, r.name || '', sBody);
+            sheet += `<c r="E${rn}" s="${r.miss ? 5 : sName}" t="inlineStr"><is><t xml:space="preserve">${escapeXml(r.name1c || '')}</t></is></c>`;
+            if (/^\d+$/.test(r.article)) sheet += cellNumber('F', rn, r.article, sCenter);
+            else sheet += cellText('F', rn, r.article || '', sBody);
+            if (r.sticker) sheet += cellSticker('G', rn, r.sticker, sCenter);
+            else sheet += cellEmpty('G', rn, sBody);
+            sheet += cellEmpty('H', rn, sBody); // этикетка — картинкой
+        }
         sheet += `</row>`;
     });
 
-    sheet += `</sheetData><autoFilter ref="A1:H${n + 1}"/>`;
+    sheet += `</sheetData><autoFilter ref="A1:${lastCol}${n + 1}"/>`;
     sheet += '<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/>';
     sheet += '<pageSetup paperSize="9" orientation="portrait" fitToWidth="1" fitToHeight="0"/>';
     sheet += '<headerFooter><oddFooter>&amp;R&amp;8стр. &amp;P из &amp;N</oddFooter></headerFooter>';
@@ -776,8 +786,8 @@ function showResults() {
             <div class="lbl">Наименований из 1С</div>
         </div>
         <div class="summary-card ok">
-            <span class="num">${rows.filter(r => r.photo).length}</span>
-            <div class="lbl">С фото товара</div>
+            <span class="num">${LP_WITHOUT_IMAGES ? rows.filter(r => r.label).length : rows.filter(r => r.photo).length}</span>
+            <div class="lbl">${LP_WITHOUT_IMAGES ? 'С этикеткой ШК' : 'С фото товара'}</div>
         </div>
     `;
 
@@ -791,7 +801,7 @@ function showResults() {
         warnHtml += `<p><strong>⚠️ ${noName} артикул(ов) не нашлось в прайсе</strong> — в «Наименовании 1С» оставлено наименование из ЛК, строки подсвечены жёлтым: ${arts}${noName > 10 ? ' …' : ''}</p>`;
     }
     const noPhoto = rows.filter(r => !r.photo).length;
-    if (noPhoto) {
+    if (!LP_WITHOUT_IMAGES && noPhoto) {
         warnHtml += `<p><strong>ℹ️ ${noPhoto} строк(ы) без фото товара</strong> — в PDF не нашлась картинка для этих строк.</p>`;
     }
     const noLabel = rows.filter(r => !r.label).length;
@@ -833,14 +843,14 @@ function renderPreview() {
         <tr>
             <td>${r.docNum || '—'}</td>
             <td>${r.num}</td>
-            <td class="name-cell">${r.name || '—'}</td>
+            ${LP_WITHOUT_IMAGES ? '' : `<td class="name-cell">${r.name || '—'}</td>`}
             <td class="name-cell">${r.name1c || '—'}</td>
             <td>${r.article || '—'}</td>
             <td>${r.sticker ? r.sticker.replace(/(\d{4})$/, '<b>$1</b>') : '—'}</td>
-            <td>${r.photo ? '✓' : '—'}</td>
+            ${LP_WITHOUT_IMAGES ? '' : `<td>${r.photo ? '✓' : '—'}</td>`}
         </tr>`).join('') +
     (limit < rows.length
-        ? `<tr><td colspan="7" style="text-align:center; color:#86868b;">… и ещё ${rows.length - limit} строк</td></tr>`
+        ? `<tr><td colspan="${LP_WITHOUT_IMAGES ? 5 : 7}" style="text-align:center; color:#86868b;">… и ещё ${rows.length - limit} строк</td></tr>`
         : '');
 }
 
