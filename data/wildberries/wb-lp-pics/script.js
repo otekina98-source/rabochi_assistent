@@ -1,3 +1,6 @@
+// Use the matching local PDF.js worker; no CDN access is needed at runtime.
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
+
 /* ЛП ВБ с картинками и 1С
    Вход:  Лист подбора в Word (конверт из PDF, напр. tools.pdf24.org),
           этикетки ШК (PDF), прайс 1С (Excel), заказы МБТ 30 (Excel).
