@@ -65,30 +65,29 @@ function openInstruction(store, item) {
 
                 <div class="instruction-section">
                     <h3>📚 Разделы сайта</h3>
-                    
-                    <h4> Инструкция</h4>
-                    <p>Здесь хранятся все инструкции по работе с каждым магазином.</p>
-                    
+                    <h4>Инструкция</h4>
+                    <p>Здесь описано, как пользоваться сайтом. Выберите инструмент ниже — название ведёт на его страницу.</p>
                     <h4>🚚 ЯндексМаркет</h4>
-<p>Все сверки по ЯндексМаркет:</p>
-<ul>
-    <li><a href="data/yandex-market/shk-reestr/index.html" class="sverka-link">Сверка ШК и реестр</a> — сравнивает штрихкоды из PDF с наклейками с реестром номеров из 1С</li>
-    <li><a href="data/yandex-market/akt-reestr/index.html" class="sverka-link">Сверка АКТ и реестр</a> — сравнивает номера из акта (PDF) с реестром номеров из 1С</li>
-    <li><a href="data/yandex-market/gruzomesta/index.html" class="sverka-link">Сверка по грузоместам</a> — сравнивает количество грузомест из Excel файла ЛК с реестром из 1С</li>
-    <li><a href="data/yandex-market/podpis-etiketok/index.html" class="sverka-link">Подпись этикеток</a> — добавляет названия товаров на этикетки (наклейки) для печати из PDF файла</li>
-<li><a href="data/yandex-market/vycherk-zakazov/index.html" class="sverka-link">Вычерк заказов</a> — выделяет ранее отгруженные номера заказов в PDF-акте</li>
-</ul>
-                    <h4>🏪 ОЗОН</h4>
-                    <p>Все сверки по ОЗОН:</p>
                     <ul>
-                        <li><a href="data/ozon/list-reestr/index.html" class="sverka-link">Сверка Лист отгрузки и реестр</a> — сравнивает номера отгрузок из листа отгрузки (PDF) с номерами из 1С</li>
-                        <li><a href="data/ozon/podbor-reestr/index.html" class="sverka-link">Сверка Лист подбора и реестр</a> — сравнивает номера из листа подбора (PDF) с реестром</li>
+                        <li><a href="data/yandex-market/shk-reestr/index.html" class="sverka-link">Сверка ШК и реестр</a> — Загрузите PDF с ШК и вставьте реестр номеров из 1С, затем сравните списки.</li>
+                        <li><a href="data/yandex-market/akt-reestr/index.html" class="sverka-link">Сверка АКТ и реестр</a> — Загрузите акт в PDF и вставьте реестр номеров из 1С, чтобы найти расхождения.</li>
+                        <li><a href="data/yandex-market/gruzomesta/index.html" class="sverka-link">Сверка по грузоместам</a> — Загрузите Excel из ЛК и добавьте реестр 1С, затем сравните количество грузомест.</li>
+                        <li><a href="data/yandex-market/podpis-etiketok/index.html" class="sverka-link">Подпись этикеток</a> — Загрузите реестр 1С, этикетки PDF, прайс и список заказов из ЛК; подпишите этикетки товаров. Останутся заказы с количеством 1 из реестра.</li>
+                        <li><a href="data/yandex-market/vycherk-zakazov/index.html" class="sverka-link">Вычерк заказов</a> — Загрузите PDF-акт и добавьте номера ранее отгруженных заказов, чтобы выделить их в акте.</li>
+                        <li><a href="data/yandex-market/otmeny/index.html" class="sverka-link">Отмены Яндекс</a> — Вставьте номера отменённых заказов из ЛК и номера из реестра 1С; найдите совпадения — заказы, которые нужно отменить в 1С.</li>
                     </ul>
-                    
-                    <h4>🏪 Wildberries</h4>
-                    <p>Все инструменты по Wildberries:</p>
+                    <h4>🏪 ОЗОН</h4>
                     <ul>
-                        <li><a href="data/wildberries/couriers/index.html" class="sverka-link">Курьеры экспресс</a> — формирует файлы для назначения курьеров на основе Excel файла</li>
+                        <li><a href="data/ozon/list-reestr/index.html" class="sverka-link">Сверка Лист подбора(отгрузки) и реестр</a> — Загрузите лист подбора или отгрузки в PDF и добавьте реестр 1С, затем сравните номера отправлений.</li>
+                        <li><a href="data/ozon/otmenennye-zakazy/index.html" class="sverka-link">Сверка реестра 1С и отменённых заказов</a> — Загрузите реестр 1С и файл отменённых заказов из ЛК Ozon; получите список заказов, которые нужно отменить в 1С.</li>
+                        <li><a href="data/ozon/podbor-stickers/index.html" class="sverka-link">Сортировка ЛП и ШК по порядку БЕЗ картинок</a> — Загрузите прайс Excel, лист подбора PDF и наклейки PDF; скачайте лист подбора без картинок и наклейки в одном алфавитном порядке.</li>
+                        <li><a href="data/ozon/sortirovka-LP-kartinki/index.html" class="sverka-link">Сортировка ЛП и ШК с картинками</a> — Загрузите лист сборки PDF, этикетки PDF, прайс и заказы из 1С; скачайте Excel с фото и PDF с ШК в порядке строк листа.</li>
+                    </ul>
+                    <h4>🏪 Wildberries</h4>
+                    <ul>
+                        <li><a href="data/wildberries/couriers/index.html" class="sverka-link">Курьеры экспресс</a> — Загрузите Excel с данными курьеров, выберите даты, статус и склады; скачайте два Word-файла — с наименованиями и без.</li>
+                        <li><a href="data/wildberries/wb-lp-pics/index.html" class="sverka-link">Сортировка ЛП и ШК по порядку С картинками</a> — Загрузите лист подбора PDF, этикетки ШК PDF, прайс и заказы из 1С; скачайте Excel с фото и этикетками, а также PDF с ШК в том же порядке.</li>
+                        <li><a href="data/wildberries/wb-lp-no-pics/index.html" class="sverka-link">Сортировка ЛП и ШК по порядку БЕЗ картинок</a> — Загрузите те же четыре файла, что и в варианте с картинками; скачайте Excel только с колонками «№ документа», «№ задания», «Наименование 1С», «Артикул», «Стикер» и отдельный PDF с ШК в том же порядке.</li>
                     </ul>
                 </div>
 
