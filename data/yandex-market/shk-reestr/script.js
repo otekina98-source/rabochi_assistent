@@ -141,7 +141,7 @@ function showResults() {
             }
             
             return `<tr class="${rowClass}" style="animation-delay: ${idx * 0.03}s">
-                <td onclick="copyOrderNumber(this)" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); copyOrderNumber(this); }" role="button" tabindex="0" title="Нажмите, чтобы скопировать номер" style="cursor:pointer;">${r.number}</td>
+                <td><button type="button" class="copy-order-number" data-order-number="${r.number}" onclick="copyOrderNumber(this)" title="Нажмите, чтобы скопировать номер"><span>${r.number}</span><span class="copy-feedback" aria-live="polite">📋</span></button></td>
                 <td style="text-align:center; font-size:1.2em;">${r.inShk ? '✅' : '❌'}</td>
                 <td style="text-align:center; font-size:1.2em;">${r.inReestr ? '✅' : '❌'}</td>
                 <td><span class="badge ${badgeClass}">${badgeText}</span></td>
@@ -200,12 +200,10 @@ function copyDiffNumbers() {
     });
 }
 
-async function copyOrderNumber(cell) {
-    const number = cell.textContent.trim();
-    try {
-        if (!navigator.clipboard || !navigator.clipboard.writeText) throw new Error('Clipboard unavailable');
-        await navigator.clipboard.writeText(number);
-    } catch (error) {
+async function copyOrderNumber(button) {
+    const number = button.dataset.orderNumber;
+    const feedback = button.querySelector('.copy-feedback');
+    const fallbackCopy = () => {
         const textarea = document.createElement('textarea');
         textarea.value = number;
         textarea.style.position = 'fixed';
@@ -214,11 +212,27 @@ async function copyOrderNumber(cell) {
         textarea.select();
         try {
             if (!document.execCommand('copy')) throw new Error('Copy failed');
-        } catch (fallbackError) {
-            alert('Не удалось скопировать номер');
         } finally {
             textarea.remove();
-            cell.focus();
+            button.focus();
         }
+    };
+    try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            try { await navigator.clipboard.writeText(number); }
+            catch (error) { fallbackCopy(); }
+        } else {
+            fallbackCopy();
+        }
+        feedback.textContent = '✓ Скопировано';
+        button.title = 'Скопировано: ' + number;
+        clearTimeout(button.copyFeedbackTimer);
+        button.copyFeedbackTimer = setTimeout(() => {
+            feedback.textContent = '📋';
+            button.title = 'Нажмите, чтобы скопировать номер';
+        }, 2000);
+    } catch (error) {
+        feedback.textContent = 'Не удалось скопировать';
+        button.title = 'Не удалось скопировать номер. Нажмите ещё раз.';
     }
 }
