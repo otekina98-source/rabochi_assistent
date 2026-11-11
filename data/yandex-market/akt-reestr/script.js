@@ -138,7 +138,7 @@ function showResults() {
             }
             
             return `<tr class="${rowClass}" style="animation-delay: ${idx * 0.03}s">
-                <td>${r.number}</td>
+                <td onclick="copyOrderNumber(this)" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); copyOrderNumber(this); }" role="button" tabindex="0" title="Нажмите, чтобы скопировать номер" style="cursor:pointer;">${r.number}</td>
                 <td style="text-align:center; font-size:1.2em;">${r.inAkt ? '✅' : '❌'}</td>
                 <td style="text-align:center; font-size:1.2em;">${r.inReestr ? '✅' : '❌'}</td>
                 <td><span class="badge ${badgeClass}">${badgeText}</span></td>
@@ -188,4 +188,27 @@ function copyDiffNumbers() {
         }
         document.body.removeChild(textarea);
     });
+}
+
+async function copyOrderNumber(cell) {
+    const number = cell.textContent.trim();
+    try {
+        if (!navigator.clipboard || !navigator.clipboard.writeText) throw new Error('Clipboard unavailable');
+        await navigator.clipboard.writeText(number);
+    } catch (error) {
+        const textarea = document.createElement('textarea');
+        textarea.value = number;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+            if (!document.execCommand('copy')) throw new Error('Copy failed');
+        } catch (fallbackError) {
+            alert('Не удалось скопировать номер');
+        } finally {
+            textarea.remove();
+            cell.focus();
+        }
+    }
 }
