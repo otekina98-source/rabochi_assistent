@@ -214,12 +214,13 @@ async function copyOrderNumber(button) {
         } else {
             fallbackCopy();
         }
+        button.classList.add('is-copied');
         feedback.textContent = '✓ Скопировано';
         button.title = 'Скопировано: ' + number;
         clearTimeout(button.copyFeedbackTimer);
         button.copyFeedbackTimer = setTimeout(() => {
-            feedback.textContent = '📋';
-            button.title = 'Нажмите, чтобы скопировать номер';
+            feedback.textContent = '✓';
+            button.title = 'Номер уже скопирован. Нажмите, чтобы скопировать ещё раз.';
         }, 2000);
     } catch (error) {
         feedback.textContent = 'Не удалось скопировать';

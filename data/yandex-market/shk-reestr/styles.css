@@ -348,3 +348,11 @@ tbody tr.row-match {
     outline-offset: 2px;
 }
 .copy-feedback { font-size: 0.8em; }
+
+.copy-order-number.is-copied,
+.copy-order-number.is-copied:hover,
+.copy-order-number.is-copied:focus-visible {
+    background: #DCFCE7;
+    color: #166534;
+    border: 1px solid #16A34A;
+}
