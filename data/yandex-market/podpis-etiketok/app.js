@@ -4,7 +4,7 @@
    Артикулы (SKU) берутся из списка заказов ЛК, названия — из прайса.
    Этикетки подписываются и сортируются по алфавиту по наименованию. */
 
-const PDFJS_WORKER_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+const PDFJS_WORKER_URL = new URL('../../wildberries/wb-lp-pics/vendor/pdf.worker.min.js', document.currentScript.src).href;
 const TESSERACT_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
 const OCR_LANG = 'eng';
 
