@@ -154,9 +154,25 @@
     <script src="font-data-bold.js?v=2"></script>
     <script src="fontkit.local.js?v=2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script src="xlsx.styles.bundle.js?v=2"></script>
-    <script>window.XLSX_STYLED = window.XLSX;</script>
-    <script src="https://cdn.sheetjs.com/xlsx-0.18.5/package/dist/xlsx.full.min.js"></script>
+    <!-- XLSX: primary CDN with two synchronous fallbacks. Keep before app.js. -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script>
+        if (!window.XLSX) {
+            document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"><\/script>');
+        }
+    </script>
+    <script>
+        if (!window.XLSX) {
+            document.write('<script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"><\/script>');
+        }
+    </script>
+    <script>
+        if (!window.XLSX) {
+            window.addEventListener('DOMContentLoaded', function () {
+                alert('Не удалось загрузить библиотеку Excel (XLSX). Проверьте интернет или VPN и обновите страницу.');
+            });
+        }
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
     <script src="app.js?v=7"></script>
 
