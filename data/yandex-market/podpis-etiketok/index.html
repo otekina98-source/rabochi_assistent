@@ -154,22 +154,18 @@
     <script src="font-data-bold.js?v=2"></script>
     <script src="fontkit.local.js?v=2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <!-- XLSX: primary CDN with two synchronous fallbacks. Keep before app.js. -->
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Use the XLSX bundle already hosted in this repository. -->
+    <script src="../../wildberries/wb-lp-pics/vendor/xlsx.full.min.js"></script>
     <script>
+        // Fallback for deployments where the shared local file is unavailable.
         if (!window.XLSX) {
             document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"><\/script>');
         }
     </script>
     <script>
         if (!window.XLSX) {
-            document.write('<script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"><\/script>');
-        }
-    </script>
-    <script>
-        if (!window.XLSX) {
             window.addEventListener('DOMContentLoaded', function () {
-                alert('Не удалось загрузить библиотеку Excel (XLSX). Проверьте интернет или VPN и обновите страницу.');
+                alert('Библиотека Excel (XLSX) не загрузилась. Обновите страницу Ctrl+F5 или сообщите об ошибке.');
             });
         }
     </script>
