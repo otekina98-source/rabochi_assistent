@@ -57,9 +57,16 @@ function updateStartBtn() {
 function wireUpload(areaId, inputId, statusId, nameId, handler) {
     const area = document.getElementById(areaId);
     const input = document.getElementById(inputId);
-    input.addEventListener('change', e => {
-        if (e.target.files[0]) handler(e.target.files[0]);
-        input.value = '';
+    input.addEventListener('change', async e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        // Не очищаем input до завершения чтения: для некоторых файловых
+        // провайдеров Chrome ранний сброс обрывает доступ к выбранному файлу.
+        try {
+            await handler(file);
+        } finally {
+            if (input.files[0] === file) input.value = '';
+        }
     });
     area.addEventListener('dragover', e => { e.preventDefault(); area.classList.add('dragover'); });
     area.addEventListener('dragleave', () => area.classList.remove('dragover'));
@@ -114,6 +121,17 @@ function activateCachedPrice(reason) {
     return true;
 }
 
+/* Браузер может потерять доступ к файлу из временной папки,
+   облачного диска или при перетаскивании из другого приложения. */
+function fileReadError(err) {
+    const msg = String(err && err.message || err || 'неизвестная ошибка');
+    if (/requested file or directory could not be found|notfounderror|could not be found at the time|not readable|notreadableerror/i.test(msg)) {
+        return 'Браузер не может прочитать исходный файл. Сохраните PDF/Excel в обычную папку на компьютере (например, «Загрузки»), затем выберите его кнопкой «Выбрать». ' +
+            'Не перетаскивайте файл прямо из архива, почты или облака. Техническая ошибка: ' + msg;
+    }
+    return msg;
+}
+
 /* ============================ Прайс (Excel) ============================ */
 
 async function handlePrice(file) {
@@ -144,8 +162,8 @@ async function handlePrice(file) {
             'success');
     } catch (err) {
         state.price = null;
-        if (!activateCachedPrice('Не удалось прочитать новый прайс: ' + err.message + '.')) {
-            setStatus('priceStatus', '❌ Ошибка прайса: ' + err.message + '. Загрузите исправный Excel.', 'error');
+        if (!activateCachedPrice('Не удалось прочитать новый прайс: ' + fileReadError(err) + '.')) {
+            setStatus('priceStatus', '❌ Ошибка прайса: ' + fileReadError(err) + '. Загрузите исправный Excel.', 'error');
         }
         console.error(err);
     }
@@ -343,7 +361,7 @@ async function handleLp(file) {
             'success');
     } catch (err) {
         state.lp = null;
-        setStatus('lpStatus', '❌ Ошибка: ' + err.message, 'error');
+        setStatus('lpStatus', '❌ Ошибка: ' + fileReadError(err), 'error');
         console.error(err);
     }
     updateStartBtn();
@@ -441,7 +459,7 @@ async function handleTicket(file) {
             'success');
     } catch (err) {
         state.ticket = null;
-        setStatus('ticketStatus', '❌ Ошибка: ' + err.message, 'error');
+        setStatus('ticketStatus', '❌ Ошибка: ' + fileReadError(err), 'error');
         console.error(err);
     }
     updateStartBtn();
@@ -646,7 +664,7 @@ async function startPack() {
         showResults();
     } catch (err) {
         console.error(err);
-        setProgress(0, '❌ Ошибка: ' + err.message, '');
+        setProgress(0, '❌ Ошибка: ' + fileReadError(err), '');
     }
     btn.disabled = false;
     updateStartBtn();
