@@ -57,16 +57,9 @@ function updateStartBtn() {
 function wireUpload(areaId, inputId, statusId, nameId, handler) {
     const area = document.getElementById(areaId);
     const input = document.getElementById(inputId);
-    input.addEventListener('change', async e => {
-        const file = e.target.files[0];
-        if (!file) return;
-        // Не очищаем input до завершения чтения: для некоторых файловых
-        // провайдеров Chrome ранний сброс обрывает доступ к выбранному файлу.
-        try {
-            await handler(file);
-        } finally {
-            if (input.files[0] === file) input.value = '';
-        }
+    input.addEventListener('change', e => {
+        if (e.target.files[0]) handler(e.target.files[0]);
+        input.value = '';
     });
     area.addEventListener('dragover', e => { e.preventDefault(); area.classList.add('dragover'); });
     area.addEventListener('dragleave', () => area.classList.remove('dragover'));
@@ -76,60 +69,6 @@ function wireUpload(areaId, inputId, statusId, nameId, handler) {
         const file = e.dataTransfer.files[0];
         if (file) handler(file);
     });
-}
-
-/* Локальная копия последнего успешно прочитанного прайса.
-   Не требует Google или сети после первой успешной загрузки. */
-const PRICE_CACHE_KEY = 'ozon-podbor-stickers-price-v1';
-
-function savePriceCache(price) {
-    try {
-        localStorage.setItem(PRICE_CACHE_KEY, JSON.stringify({
-            name: price.name,
-            savedAt: new Date().toISOString(),
-            entries: Array.from(price.map.entries())
-        }));
-    } catch (error) {
-        console.warn('Не удалось сохранить резервную копию прайса', error);
-    }
-}
-
-function readPriceCache() {
-    try {
-        const saved = JSON.parse(localStorage.getItem(PRICE_CACHE_KEY) || 'null');
-        if (!saved || !Array.isArray(saved.entries) || !saved.entries.length) return null;
-        const map = new Map(saved.entries.filter(([art, name]) => art && name));
-        if (!map.size) return null;
-        return { map, name: saved.name || 'Сохранённый прайс', count: map.size, savedAt: saved.savedAt };
-    } catch (error) {
-        console.warn('Не удалось прочитать резервную копию прайса', error);
-        return null;
-    }
-}
-
-function activateCachedPrice(reason) {
-    const cached = readPriceCache();
-    if (!cached) return false;
-    state.price = cached;
-    document.getElementById('priceFileName').textContent = cached.name;
-    document.getElementById('priceUploadArea').classList.add('loaded');
-    const stamp = cached.savedAt ? new Date(cached.savedAt).toLocaleString('ru-RU') : 'дата неизвестна';
-    setStatus('priceStatus',
-        '⚠️ ' + reason + ' Используется локальная копия прайса (' + cached.count +
-        ' наименований, сохранена ' + stamp + '). Проверьте её актуальность.', 'warn');
-    updateStartBtn();
-    return true;
-}
-
-/* Браузер может потерять доступ к файлу из временной папки,
-   облачного диска или при перетаскивании из другого приложения. */
-function fileReadError(err) {
-    const msg = String(err && err.message || err || 'неизвестная ошибка');
-    if (/requested file or directory could not be found|notfounderror|could not be found at the time|not readable|notreadableerror/i.test(msg)) {
-        return 'Браузер не может прочитать исходный файл. Сохраните PDF/Excel в обычную папку на компьютере (например, «Загрузки»), затем выберите его кнопкой «Выбрать». ' +
-            'Не перетаскивайте файл прямо из архива, почты или облака. Техническая ошибка: ' + msg;
-    }
-    return msg;
 }
 
 /* ============================ Прайс (Excel) ============================ */
@@ -155,16 +94,13 @@ async function handlePrice(file) {
         }
         if (map.size === 0) throw new Error('не найдены столбцы «артикул + наименование»');
         state.price = { map, name: file.name, count: map.size };
-        savePriceCache(state.price);
         document.getElementById('priceUploadArea').classList.add('loaded');
         setStatus('priceStatus',
             `✅ Загружено ${map.size} наименований` + (empty ? ` (пропущено повторов: ${empty})` : ''),
             'success');
     } catch (err) {
         state.price = null;
-        if (!activateCachedPrice('Не удалось прочитать новый прайс: ' + fileReadError(err) + '.')) {
-            setStatus('priceStatus', '❌ Ошибка прайса: ' + fileReadError(err) + '. Загрузите исправный Excel.', 'error');
-        }
+        setStatus('priceStatus', '❌ Ошибка: ' + err.message, 'error');
         console.error(err);
     }
     updateStartBtn();
@@ -361,7 +297,7 @@ async function handleLp(file) {
             'success');
     } catch (err) {
         state.lp = null;
-        setStatus('lpStatus', '❌ Ошибка: ' + fileReadError(err), 'error');
+        setStatus('lpStatus', '❌ Ошибка: ' + err.message, 'error');
         console.error(err);
     }
     updateStartBtn();
@@ -459,7 +395,7 @@ async function handleTicket(file) {
             'success');
     } catch (err) {
         state.ticket = null;
-        setStatus('ticketStatus', '❌ Ошибка: ' + fileReadError(err), 'error');
+        setStatus('ticketStatus', '❌ Ошибка: ' + err.message, 'error');
         console.error(err);
     }
     updateStartBtn();
@@ -617,13 +553,6 @@ async function startPack() {
             };
         });
         const notInPrice = rows.filter(r => !r.fromPrice).length;
-        // Ноль совпадений обычно означает неверный файл/столбцы/формат артикула.
-        // Не выдаём его за корректный результат со всеми названиями из PDF.
-        if (rows.length && notInPrice === rows.length) {
-            throw new Error('Ни один артикул Листа подбора не найден в прайсе. ' +
-                'Проверьте содержимое Excel и соответствие артикулов. ' +
-                'Файлы не сформированы, чтобы случайно не заменить все названия на PDF.');
-        }
 
         // 2. Сортировка по наименованию (алфавит, русский);
         //    при одинаковых названиях сохраняется исходный порядок листа
@@ -664,7 +593,7 @@ async function startPack() {
         showResults();
     } catch (err) {
         console.error(err);
-        setProgress(0, '❌ Ошибка: ' + fileReadError(err), '');
+        setProgress(0, '❌ Ошибка: ' + err.message, '');
     }
     btn.disabled = false;
     updateStartBtn();
@@ -791,7 +720,6 @@ document.getElementById('downloadPdfBtn').addEventListener('click', () => {
     if (built) download(built.pdfBlob, 'Наклейки_по_порядку.pdf');
 });
 
-if (readPriceCache()) activateCachedPrice('Прайс ещё не загружен в этой сессии.');
 wireUpload('priceUploadArea', 'priceFileInput', 'priceStatus', 'priceFileName', handlePrice);
 wireUpload('lpUploadArea', 'lpFileInput', 'lpStatus', 'lpFileName', handleLp);
 wireUpload('ticketUploadArea', 'ticketFileInput', 'ticketStatus', 'ticketFileName', handleTicket);
