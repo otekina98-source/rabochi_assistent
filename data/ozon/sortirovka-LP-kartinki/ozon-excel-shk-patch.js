@@ -15,8 +15,7 @@
     const numberToDisplay = (r, iiMap) => String(iiMap.get(r.posting) || r.posting || '').replace(/\s+/g, '');
     function parts(num) {
         if (/^ii\d{8,16}$/i.test(num)) return [num.slice(0,-4),num.slice(-4),''];
-        const m = /^(\d{4,6})(\d{4})(-\d{3,5}-\d{1,3})$/.exec(num);
-        if (m) return [m[1],m[2],m[3]];
+        // Старый ШК — это номер отправления целиком; не выделяем его часть синим.
         return [num,'',''];
     }
     const basic = s => '<r><rPr><sz val="11"/><rFont val="Calibri"/></rPr><t xml:space="preserve">'+xmlEscape(s)+'</t></r>';
@@ -25,6 +24,78 @@
         const [a,b,c] = parts(value);
         const runs = b ? basic(a)+highlight(b)+(c?basic(c):'') : basic(a);
         return '<c r="'+ref+'" s="'+style+'" t="inlineStr"><is>'+runs+'</is></c>';
+    }
+
+    async function highlightLegacyRows(zip, sheet, rows, iiMap) {
+        const legacyPostings = new Set();
+        for (const value of (shkData?.pageToNum?.values?.() || [])) {
+            const posting = String(value || '').replace(/[\s\u00a0\u2007\u202f]/g, '');
+            if (/^\d{5,10}-\d{3,5}-\d{1,3}$/.test(posting)) legacyPostings.add(posting);
+        }
+        const legacyRows = rows
+            .map((row, i) => ({row, rowNumber: i + 2}))
+            .filter(({row}) => !iiMap.get(row.posting) && legacyPostings.has(String(row.posting || '').replace(/[\s\u00a0\u2007\u202f]/g, '')));
+        if (!legacyRows.length) return sheet;
+
+        const stylesFile = zip.file('xl/styles.xml');
+        if (!stylesFile) throw new Error('Не найден файл стилей Excel для подсветки старых ШК');
+        let styles = await stylesFile.async('string');
+        const fillsMatch = /<fills\b([^>]*)>([\s\S]*?)<\/fills>/.exec(styles);
+        const xfsMatch = /<cellXfs\b([^>]*)>([\s\S]*?)<\/cellXfs>/.exec(styles);
+        if (!fillsMatch || !xfsMatch) throw new Error('Не удалось прочитать стили Excel');
+
+        const countValue = (attrs, body, tag) =>
+            Number(/\bcount="(\d+)"/.exec(attrs)?.[1]) || [...body.matchAll(new RegExp('<' + tag + '\\b', 'g'))].length;
+        const fillCount = countValue(fillsMatch[1], fillsMatch[2], 'fill');
+        const fillId = fillCount;
+        const greenFill = '<fill><patternFill patternType="solid"><fgColor rgb="FFD9EAD3"/><bgColor indexed="64"/></patternFill></fill>';
+        styles = styles.replace(fillsMatch[0], fillsMatch[0]
+            .replace(/\bcount="\d+"/, 'count="' + (fillCount + 1) + '"')
+            .replace('</fills>', greenFill + '</fills>'));
+
+        const originalXfs = [...xfsMatch[2].matchAll(/<xf\b[^>]*(?:\/>|>[\s\S]*?<\/xf>)/g)].map(m => m[0]);
+        const xfCount = countValue(xfsMatch[1], xfsMatch[2], 'xf');
+        const newXfs = [];
+        const styleByBase = new Map();
+        function greenStyle(baseId) {
+            if (styleByBase.has(baseId)) return styleByBase.get(baseId);
+            let xf = originalXfs[baseId] || originalXfs[0];
+            if (!xf) throw new Error('Не найден базовый стиль Excel: ' + baseId);
+            xf = xf.replace(/^<xf\b[^>]*>/, opening => {
+                let next = opening.replace(/\sfillId="[^"]*"/, ' fillId="' + fillId + '"');
+                if (!/\sfillId="/.test(next)) next = next.replace(/\s*\/?\s*>$/, ' fillId="' + fillId + '"/>');
+                if (/\sapplyFill="[^"]*"/.test(next)) next = next.replace(/\sapplyFill="[^"]*"/, ' applyFill="1"');
+                else next = next.replace(/\s*\/?\s*>$/, ' applyFill="1"/>');
+                return next;
+            });
+            const id = xfCount + newXfs.length;
+            newXfs.push(xf);
+            styleByBase.set(baseId, id);
+            return id;
+        }
+
+        for (const {rowNumber} of legacyRows) {
+            const rowRe = new RegExp('<row\\b(?=[^>]*\\br="' + rowNumber + '")[^>]*>[\\s\\S]*?<\\/row>');
+            const match = rowRe.exec(sheet);
+            if (!match) continue;
+            const updated = match[0].replace(/<c\b[^>]*>/g, opening => {
+                const baseId = Number(/\bs="(\d+)"/.exec(opening)?.[1] || 0);
+                const nextId = greenStyle(baseId);
+                return /\bs="\d+"/.test(opening)
+                    ? opening.replace(/\bs="\d+"/, 's="' + nextId + '"')
+                    : opening.replace(/>$/, ' s="' + nextId + '">');
+            });
+            sheet = sheet.replace(rowRe, updated);
+        }
+        if (newXfs.length) {
+            const newCount = xfCount + newXfs.length;
+            const updatedXfs = xfsMatch[0]
+                .replace(/\bcount="\d+"/, 'count="' + newCount + '"')
+                .replace('</cellXfs>', newXfs.join('') + '</cellXfs>');
+            styles = styles.replace(xfsMatch[0], updatedXfs);
+            zip.file('xl/styles.xml', styles);
+        }
+        return sheet;
     }
 
     // Для Excel картинки этикеток больше не нужны: читаем только идентификаторы.
@@ -116,6 +187,9 @@
             const style=/<c\b[^>]*\bs="(\d+)"/.exec(matched[0])?.[1] || '3';
             sheet=sheet.replace(re,richCell(ref,numberToDisplay(row,iiMap),style));
         });
+        // Старые наклейки без ii должны отображаться как полный номер отправления
+        // и выделяться зелёной строкой только при найденной странице PDF.
+        sheet = await highlightLegacyRows(zip, sheet, rows, iiMap);
         // Колонка теперь содержит полный номер ШК, а не 4 цифры.
         sheet=sheet.replace(new RegExp('<col\\b(?=[^>]*\\bmin="'+stickerIndex+'")(?=[^>]*\\bmax="'+stickerIndex+'")[^>]*/>'),
           m => m.replace(/width="[^"]+"/,'width="25"'));
