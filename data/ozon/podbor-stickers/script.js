@@ -446,19 +446,20 @@ function buildXlsx(rows) {
         '<font><sz val="11"/><color rgb="FF7A5B00"/><name val="Calibri"/></font>' + // 2 — подсвеченная строка
         '<font><b/><sz val="14"/><color rgb="FF005BFF"/><name val="Calibri"/></font>' + // 3 — выделенные четыре цифры ШК
         '</fonts>' +
-        '<fills count="5">' +
+        '<fills count="6">' +
         '<fill><patternFill patternType="none"/></fill>' +
         '<fill><patternFill patternType="gray125"/></fill>' +
         '<fill><patternFill patternType="solid"><fgColor rgb="FF005BFF"/><bgColor indexed="64"/></patternFill></fill>' + // 2 — синяя шапка
         '<fill><patternFill patternType="solid"><fgColor rgb="FFFFF3CD"/><bgColor indexed="64"/></patternFill></fill>' + // 3 — жёлтая подсветка
         '<fill><patternFill patternType="solid"><fgColor rgb="FFD9D9D9"/><bgColor indexed="64"/></patternFill></fill>' + // 4 — серая полоса блока товара
+        '<fill><patternFill patternType="solid"><fgColor rgb="FFD9EAD3"/><bgColor indexed="64"/></patternFill></fill>' + // 5 — совпавшая старая наклейка
         '</fills>' +
         '<borders count="2">' +
         '<border><left/><right/><top/><bottom/><diagonal/></border>' +
         '<border><left style="thin"><color rgb="FF9DC3F7"/></left><right style="thin"><color rgb="FF9DC3F7"/></right><top style="thin"><color rgb="FF9DC3F7"/></top><bottom style="thin"><color rgb="FF9DC3F7"/></bottom><diagonal/></border>' +
         '</borders>' +
         '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-        '<cellXfs count="5">' +
+        '<cellXfs count="6">' +
         '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' + // 0 — обычная ячейка
         '<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1">' +
         '<alignment horizontal="center" vertical="center"/>' + // 1 — шапка
@@ -466,6 +467,7 @@ function buildXlsx(rows) {
         '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' + // 2 — данные
         '<xf numFmtId="0" fontId="0" fillId="4" borderId="0" xfId="0" applyFill="1"/>' + // 3 — данные с серой полосой
         '<xf numFmtId="0" fontId="2" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1"/>' + // 4 — название не из прайса
+        '<xf numFmtId="0" fontId="0" fillId="5" borderId="0" xfId="0" applyFill="1"/>' + // 5 — старая наклейка найдена
         '</cellXfs>' +
         '<cellStyles count="1"><cellStyle name="Обычный" xfId="0" builtinId="0"/></cellStyles>' +
         '</styleSheet>');
@@ -515,7 +517,7 @@ function buildXlsx(rows) {
     rows.forEach((r, i) => {
         if (r.name !== prevName) { band = !band; prevName = r.name; }
         const rn = i + 2;
-        const s = !r.fromPrice ? 4 : (band ? 3 : 2);
+        const s = r.legacySticker ? 5 : (!r.fromPrice ? 4 : (band ? 3 : 2));
         sheet += `<row r="${rn}">${cell('A' + rn, r.num, s)}${cell('B' + rn, r.article, s)}${cell('C' + rn, r.name, s)}${labelCell('D' + rn, r, s)}</row>`;
     });
 
@@ -561,17 +563,20 @@ async function startPack() {
         rows.sort((a, b) =>
             a.name.localeCompare(b.name, 'ru') || a.origIdx - b.origIdx);
 
-        // 3. Excel
-        setProgress(20, 'Формирование Листа подбора (Excel)...', '');
-        const xlsxBlob = await buildXlsx(rows);
-        setProgress(55, 'Лист подбора готов', '');
-
-        // 4. Порядок наклеек = порядок строк
-        setProgress(60, 'Сопоставление наклеек с листом...', '');
+        // 3. Сопоставление наклеек и отметка найденных старых этикеток
+        setProgress(18, 'Сопоставление наклеек с листом...', '');
         await new Promise(r => setTimeout(r, 30));
         const pageOf = state.ticket.pageOf;
         const { pageIndices, missingStickers, extraStickers } =
             matchStickerPages(rows, pageOf, state.ticket.pages);
+        rows.forEach((row, i) => {
+            row.legacySticker = !row.labelId && pageIndices[i] !== null;
+        });
+
+        // 4. Excel
+        setProgress(25, 'Формирование Листа подбора (Excel)...', '');
+        const xlsxBlob = await buildXlsx(rows);
+        setProgress(55, 'Лист подбора готов', '');
         const extraNums = [];
         for (const p of extraStickers) {
             extraNums.push(state.ticket.pageToNum.get(p) || ('стр. ' + p));
