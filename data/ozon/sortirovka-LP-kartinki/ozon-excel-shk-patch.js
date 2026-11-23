@@ -61,13 +61,14 @@
             if (styleByBase.has(baseId)) return styleByBase.get(baseId);
             let xf = originalXfs[baseId] || originalXfs[0];
             if (!xf) throw new Error('Не найден базовый стиль Excel: ' + baseId);
-            xf = xf.replace(/^<xf\b[^>]*>/, opening => {
-                let next = opening.replace(/\sfillId="[^"]*"/, ' fillId="' + fillId + '"');
-                if (!/\sfillId="/.test(next)) next = next.replace(/\s*\/?\s*>$/, ' fillId="' + fillId + '"/>');
-                if (/\sapplyFill="[^"]*"/.test(next)) next = next.replace(/\sapplyFill="[^"]*"/, ' applyFill="1"');
-                else next = next.replace(/\s*\/?\s*>$/, ' applyFill="1"/>');
-                return next;
-            });
+            const setAttr = (tag, name, value) => {
+                const attr = new RegExp('\\s' + name + '="[^"]*"');
+                if (attr.test(tag)) return tag.replace(attr, ' ' + name + '="' + value + '"');
+                const closing = tag.endsWith('/>') ? 2 : 1;
+                return tag.slice(0, -closing) + ' ' + name + '="' + value + '"' + tag.slice(-closing);
+            };
+            xf = xf.replace(/^<xf\b[^>]*>/, opening =>
+                setAttr(setAttr(opening, 'fillId', fillId), 'applyFill', '1'));
             const id = xfCount + newXfs.length;
             newXfs.push(xf);
             styleByBase.set(baseId, id);
