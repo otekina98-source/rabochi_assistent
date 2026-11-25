@@ -10,6 +10,9 @@
     <script src="https://misha-spec.github.io/sistema_bystrogo_scheta_po_trakhtenbergu/assets/vendor/jszip.min.js"></script>
     <script src="https://misha-spec.github.io/sistema_bystrogo_scheta_po_trakhtenbergu/assets/vendor/pdf.min.js"></script>
     <script src="https://misha-spec.github.io/sistema_bystrogo_scheta_po_trakhtenbergu/assets/vendor/pdf-lib.min.js"></script>
+    <style>
+        #warningsSection, #warningsBox { display: none !important; }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -121,24 +124,5 @@
 <script src="ozon-excel-shk-patch.js?v=2"></script>
 <script src="ozon-final-matching.js"></script>
 
-<script>
-(function () {
-    const box = document.getElementById('warningsBox');
-    const section = document.getElementById('warningsSection');
-    if (!box || !section) return;
-    const filter = () => {
-        for (const p of box.querySelectorAll('p')) {
-            const t = p.textContent || '';
-            if (/строк\(и\) без этикетки\s*—\s*отправление не нашлось/i.test(t) ||
-                /Этикеток\s*\(\d+\)\s*больше, чем строк\s*\(\d+\).*добавлены в конец файла/i.test(t)) {
-                p.remove();
-            }
-        }
-        if (!box.textContent.trim()) section.classList.add('hidden');
-    };
-    new MutationObserver(filter).observe(box, {childList:true, subtree:true, characterData:true});
-    filter();
-})();
-</script>
 </body>
 </html>
