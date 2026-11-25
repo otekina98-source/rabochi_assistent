@@ -141,7 +141,10 @@
                     it.transform[4]>=25 && it.transform[4]<190 &&
                     it.transform[5]<=a.y+3 && it.transform[5]>below
                 )})) {
-                    const m=/(?:^|[^a-z0-9])(ii\s*(?:\d\s*){8,16})(?!\d)/i.exec(line.text);
+                    // Prefer the complete PDF text token; never append a separate product digit.
+                    const exact = line.words.map(w => norm(w.text)).find(id => /^ii\d{11}$/.test(id));
+                    if (exact) { ids.push(exact); continue; }
+                    const m=/(?:^|[^a-z0-9])(ii\s*(?:\d\s*){10}\d)(?!\d)/i.exec(line.text);
                     if(m && validII.test(norm(m[1]))) ids.push(norm(m[1]));
                 }
                 // Иногда pdf.js ставит разные базовые линии внутри одного ШК.
